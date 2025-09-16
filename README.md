@@ -1,2 +1,1 @@
-# fabricat
-Multiplayer game about management 
+You have been appointed president of the company. The company owns several factories. Every month, the company buys raw materials, processes them, and sells the manufactured products. Now you will have to decide how many and what products to produce, when exactly to expand production, and how to finance the expansion.
