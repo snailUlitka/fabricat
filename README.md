@@ -52,6 +52,39 @@ A networked economic strategy game for 2–4 players. Each controls a "company":
 | Loan interest                            | **1%/mo.**; early repayment — **forbidden**                                     |
 | Collateral/limits                        | loans secured by factories; total debt ≤ **½ guaranteed capital** (per rules)   |
 
+###### Lobby configuration parameters (defaults shown)
+
+1. Player starting capital — **\$10,000**
+2. Starting resources: RMs — **2**
+3. Starting resources: FGs — **2**
+4. Starting factories: basic — **2**
+5. Starting factories: automated — **2**
+6. Basic factory: launch throughput (RMs per launch) — **1**
+7. Basic factory: launch cost — **\$2,000**
+8. Automated factory: launch throughput (max RMs per launch) — **2**
+9. Automated factory: launch cost — **\$3,000**
+10. Storage: monthly fee per RM — **\$300**
+11. Storage: monthly fee per FG — **\$500**
+12. Monthly expenses: basic factory — **\$1,000**
+13. Monthly expenses: automated factory — **\$1,500**
+14. Basic factory construction: total cost — **\$5,000**
+15. Basic factory construction: duration (months) — **5**
+16. Basic factory construction: payment share per instalment — **50%**
+17. Basic factory construction: timing of final payment (months before delivery) — **1**
+18. Automated factory construction: total cost — **\$10,000**
+19. Automated factory construction: duration (months) — **7**
+20. Automated factory construction: payment share per instalment — **50%**
+21. Automated factory construction: timing of final payment (months before delivery) — **1**
+22. Upgrade (basic → automated): cost — **\$7,000**
+23. Upgrade (basic → automated): duration (months) — **9**
+24. Upgrade: behavior during works (operates as basic) — **enabled**
+25. Factory limit (including builds in progress) — **6**
+26. Available loan #1 — **\$5,000**
+27. Available loan #2 — **\$10,000**
+28. Loan interest rate (per month) — **1%**
+29. Early loan repayment — **disabled**
+30. Debt limit: share of guaranteed capital — **0.5×**
+
 ##### Cumulative Seniority Rule
 
 1. **Seniority order** is set for **each month** as an ordered list of players (position 1 — most senior).
@@ -205,18 +238,3 @@ In month 3, a tie between Player 1 and Player 2 is resolved in favor of Player 1
 | 6. Loans        | Accrues interest, collects payments         | Repay / take new        |
 | 7. Construction | Manages timelines, enforces limits          | Submit build/upgrade    |
 | 8. End of month | Checks bankruptcies, rotates order          | Review reports          |
-
-### Starting and system restrictions table
-
-| Category   | Restriction                                                                                           |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| Players    | 2–4 per session                                                                                       |
-| Lobby      | Connection wait — 60 s                                                                                |
-| Nickname   | 4–10 chars                                                                                            |
-| Avatars    | Catalog ≥10                                                                                           |
-| Turn       | Decision within 60 s, else skip                                                                       |
-| Factories  | ≤6 (incl. under construction)                                                                         |
-| Loans      | Denoms \$5k/\$10k; 1%/mo. interest; no early repayment                                                |
-| Expenses   | \$300/RM, \$500/FG, \$1,000 basic, \$1,500 auto                                                       |
-| Production | Launch: basic \$2,000 per 1 RM; auto \$3,000 per ≤2 RMs                                               |
-| Seniority  | Month 1 — 1d6 (lower = senior; reroll ties only); then rotate left by 1; tie-breaks — cumulative rule |
