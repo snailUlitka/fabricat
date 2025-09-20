@@ -150,6 +150,7 @@ In month 3, a tie between Player 1 and Player 2 is resolved in favor of Player 1
   * Monthly log (trades, production, expenses, interest, repayments, construction).
   * Player financial summary (cash, capital, assets, debt).
   * Bid reveal protocol (who, how much, at what price, what was bought/sold).
+  * Per-player performance stats auto-aggregated over the last 10 games (average/best capital, wins, losses, win rate, longest and average match length in turns); viewable for the owner and other players.
 
 **C. Seniority and tie-breaks (server)**
 
@@ -199,7 +200,7 @@ In month 3, a tie between Player 1 and Player 2 is resolved in favor of Player 1
 * **Loans**: take new (\$5k/\$10k) if collateral/limit allow; view schedule and interest.
 * **Construction/upgrade**: start new build or upgrade; pay 50% now and 50% one month before completion; track deadlines.
 * **Skip**: explicitly skip phase/action (or timeout).
-* **Analytics**: view monthly log, own reports, and capital summary table.
+* **Analytics**: view the monthly log, last-10-game performance metrics (average/best capital, wins/losses, win rate, longest and average match length in turns) for yourself and other players, and the capital summary table.
 
 #### Restrictions
 
