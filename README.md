@@ -144,7 +144,6 @@ In month 3, a tie between Player 1 and Player 2 is resolved in favor of Player 1
 * **Construction/upgrades**: queue management, timing and two-step payments, ≤6 factory limit (incl. under construction).
 * **Expenses and storage**: monthly deductions for RMs/FGs held and factory upkeep.
 * **Bankruptcies/victory**: auto-detect bankrupt players, stop game at last survivor, final capital calculation.
-* **Saves**: auto-save at phase boundaries; restore on crash.
 * **Reports**:
 
   * Monthly log (trades, production, expenses, interest, repayments, construction).
