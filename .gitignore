@@ -2,12 +2,11 @@
 .vscode
 .idea
 
-# Venv
-.venv
-venv
-
-# .ipynb
-.ipynb_checkpoints
-
-# python cache
-__pycache__
+# Envs
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example

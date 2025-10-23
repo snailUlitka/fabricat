@@ -1,0 +1,20 @@
+[project]
+name = "fabricat-backend"
+version = "0.1.0"
+description = "Backend for Fabricat game"
+authors = [
+    { name = "Mikhail Polevoda", email = "mihail.polevoda@gmail.com" },
+    { name = "Yulia Yanaeva", email = "anaevaulia5@gmail.com" },
+    { name = "Vika Kuzina", email = "kuzina2004@internet.ru" },
+]
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[project.scripts]
+fabricat-backend = "fabricat_backend:main"
+start = "fabricat_backend:main"
+serve = "fabricat_backend:main"
+
+[build-system]
+requires = ["uv_build>=0.8.22,<0.9.0"]
+build-backend = "uv_build"
