@@ -17,8 +17,8 @@ Maintain a clear dependency direction: `shared` → `game_logic` → `api`. Avoi
 - Format code with `uv run ruff format` (if/when ruff is introduced). Until a formatter is added, ensure files stay compliant with PEP 8 and use black-compatible formatting.
 
 ## Running the service
-- Local smoke test: `uv run python -m fabricat_backend`. Replace the placeholder print once the ASGI app is wired up.
-- When the FastAPI application is implemented, prefer `uv run uvicorn fabricat_backend.main:app --reload --port 8000` for local development.
+- Local smoke test: `uv run api` launches the development server via `fabricat_backend.main` with auto-reload enabled.
+- To emulate production locally, run `python -m fabricat_backend` from this directory; it uses the same ASGI app without reload mode.
 - Configure environment variables using `.env` files (e.g., `cp .env.example .env`). Keep secrets out of source control.
 
 ## Testing
@@ -36,5 +36,8 @@ Maintain a clear dependency direction: `shared` → `game_logic` → `api`. Avoi
 - Put constants in `shared/constants.py` (create the module if needed) rather than scattering magic numbers.
 - Keep modules small and focused. If a file grows beyond ~300 lines, consider splitting it.
 - All public functions and classes should have docstrings explaining their responsibilities and invariants.
+- SQLAlchemy declarative models ("schemas" in the database layer) must have class names matching the regex `\w+Schema`.
+- Pydantic models that represent API payloads must have class names matching `\w+Request` or `\w+Response`.
+- Always use absolute imports rooted at `fabricat_backend`; avoid relative imports such as `from .module import ...`.
 
 By following these rules you help downstream agents (and humans) keep the backend coherent and maintainable.

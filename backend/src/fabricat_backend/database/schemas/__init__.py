@@ -1,5 +1,5 @@
-"""ORM or SQL schema definitions for persisted entities.
+"""ORM schema definitions for persisted entities."""
 
-Example: ./user.py with
-class User(SQLModel, table=True): ...
-"""
+from fabricat_backend.database.schemas.user import UserSchema
+
+__all__ = ["UserSchema"]

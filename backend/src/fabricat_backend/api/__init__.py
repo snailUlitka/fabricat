@@ -1,6 +1,5 @@
-"""API layer modules exposed by the backend.
+"""API layer modules exposed by the backend."""
 
-Example: ./routers/user.py with
-@router.get("/users", response_model=list[UserResponse])
-def list_users() -> list[UserResponse]: ...
-"""
+from fabricat_backend.api.app import app, create_api
+
+__all__ = ["app", "create_api"]

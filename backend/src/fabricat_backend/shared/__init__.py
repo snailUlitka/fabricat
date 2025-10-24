@@ -1,8 +1,5 @@
-"""Shared utilities, shared models and cross-cutting helpers for the backend.
+"""Shared utilities, shared models and cross-cutting helpers for the backend."""
 
-Example: ./config.py with
-class Settings(BaseSettings): ...
+from fabricat_backend.shared.enums import AvatarIcon
 
-Example: ./models.py
-class GameResult(BaseModel): ...
-"""
+__all__ = ["AvatarIcon"]
