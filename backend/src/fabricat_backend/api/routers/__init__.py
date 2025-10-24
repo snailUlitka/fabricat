@@ -1,7 +1,6 @@
-"""Route definitions for public HTTP endpoints.
+"""Route definitions for public HTTP and WebSocket endpoints."""
 
-Example: ./user.py with
-router = APIRouter(prefix="/users")
-@router.get("/")
-def list_users() -> list[UserResponse]: ...
-"""
+from fabricat_backend.api.routers.auth import router as auth_router
+from fabricat_backend.api.routers.session import router as session_router
+
+__all__ = ["auth_router", "session_router"]
