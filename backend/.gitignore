@@ -11,3 +11,8 @@ __pycache__
 
 # uv
 .python-version
+
+# environment files
+.env
+.env.*
+!.env.example

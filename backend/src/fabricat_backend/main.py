@@ -5,9 +5,7 @@ from __future__ import annotations
 import uvicorn
 
 from fabricat_backend.api import create_api
-
-DEFAULT_HOST = "0.0.0.0"
-DEFAULT_PORT = 8000
+from fabricat_backend.settings import settings
 
 app = create_api()
 
@@ -17,8 +15,8 @@ def _run_uvicorn(*, reload: bool) -> None:
 
     uvicorn.run(
         "fabricat_backend.main:app",
-        host=DEFAULT_HOST,
-        port=DEFAULT_PORT,
+        host=settings.api_host,
+        port=settings.api_port,
         reload=reload,
     )
 
