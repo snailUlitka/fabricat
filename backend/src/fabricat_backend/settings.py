@@ -15,7 +15,7 @@ class BackendSettings(BaseSettings):
     database_url: str = "postgresql+psycopg://fabricat:fabricat@database:5432/fabricat"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    auth_secret_key: str = "change-me"
+    auth_secret_key: str
 
 
 @cache
