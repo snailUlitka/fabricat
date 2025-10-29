@@ -14,7 +14,8 @@ Maintain a clear dependency direction: `shared` → `game_logic` → `api`. Avoi
 ## Environment and tooling
 - Manage dependencies with **uv**. After editing `pyproject.toml`, regenerate the lockfile via `uv lock` (or `uv sync` if you want to install immediately).
 - Target **Python 3.12**. Avoid using deprecated stdlib modules; favor `typing` features (e.g., `typing.Self`, `enum.StrEnum`).
-- Format code with `uv run ruff format` (if/when ruff is introduced). Until a formatter is added, ensure files stay compliant with PEP 8 and use black-compatible formatting.
+- Lint code with `uv run ruff check`.
+- Format code with `uv run ruff format`. Until a formatter is added, ensure files stay compliant with PEP 8 and use black-compatible formatting.
 
 ## Running the service
 - Local smoke test: `uv run api` launches the development server via `fabricat_backend.main` with auto-reload enabled.
@@ -25,6 +26,11 @@ Maintain a clear dependency direction: `shared` → `game_logic` → `api`. Avoi
 - Use `pytest` for unit/integration tests. Store tests under `tests/` at the project root (`backend/tests/`), mirroring the `src/` layout.
 - Keep test fixtures deterministic—game logic must be reproducible for all players.
 - When you add tests, document the canonical command (e.g., `uv run pytest`) in the repository-level `AGENTS.md`.
+
+## Important Rules
+- **ALWAYS** use `uv run pytest` before commit and fix all isses
+- **ALWAYS** use `uv run ruff check` before commit and fix all issues
+- **ALWAYS** use `uv run ruff format` before commit
 
 ## Adding dependencies
 1. Declare them in `pyproject.toml` inside the `[project.dependencies]` table.
