@@ -7,6 +7,12 @@ from fabricat_backend.game_logic.configuration import (
     build_lobby_configuration,
     get_default_economy_configuration,
 )
+from fabricat_backend.game_logic.engine import MonthContext, MonthEngine, MonthResult
+from fabricat_backend.game_logic.phases import (
+    PhaseHandlers,
+    PhaseInputBase,
+    PhaseResultBase,
+)
 from fabricat_backend.game_logic.state import (
     CompanyState,
     FactoryPortfolio,
@@ -26,6 +32,12 @@ __all__ = [
     "InventoryLedger",
     "LoanAccount",
     "LobbyOverrides",
+    "MonthContext",
+    "MonthEngine",
+    "MonthResult",
+    "PhaseHandlers",
+    "PhaseInputBase",
+    "PhaseResultBase",
     "build_lobby_configuration",
     "get_default_economy_configuration",
 ]
