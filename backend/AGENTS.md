@@ -28,10 +28,10 @@ Maintain a clear dependency direction: `shared` → `game_logic` → `api`. Avoi
 - When you add tests, document the canonical command (e.g., `uv run pytest`) in the repository-level `AGENTS.md`.
 
 ## Important Rules
+- **IMPORTANT**: If `.env` is missing, create it BEFORE tests (e.g., `cp .env.example .env`) and populate it following the example values in `.env.example`.
 - **ALWAYS** use `uv run pytest` before commit and fix all isses
 - **ALWAYS** use `uv run ruff check` before commit and fix all issues
 - **ALWAYS** use `uv run ruff format` before commit
-- **IMPORTANT**: If `.env` is missing, create it (e.g., `cp .env.example .env`) and populate it following the example values in `.env.example`.
 
 ## Adding dependencies
 1. Declare them in `pyproject.toml` inside the `[project.dependencies]` table.
