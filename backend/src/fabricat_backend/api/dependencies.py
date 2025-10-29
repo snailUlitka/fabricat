@@ -10,9 +10,10 @@ from sqlalchemy.orm import Session
 
 from fabricat_backend.api.services import AuthService
 from fabricat_backend.database import UserRepository, get_session
+from fabricat_backend.settings import get_settings
 
 _security = HTTPBearer(auto_error=False)
-_auth_service = AuthService()
+_auth_service = AuthService(settings=get_settings())
 
 
 def get_auth_service() -> AuthService:

@@ -7,14 +7,21 @@ from typing import Iterator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from fabricat_backend.database.config import settings
+
+from fabricat_backend.settings import BackendSettings, get_settings
 
 
 class DatabaseService:
     """Wraps SQLAlchemy engine and session factory."""
 
-    def __init__(self, url: str | None = None) -> None:
-        self._engine = create_engine(url or settings.url, future=True)
+    def __init__(
+        self,
+        url: str | None = None,
+        *,
+        settings: BackendSettings | None = None,
+    ) -> None:
+        config = settings or get_settings()
+        self._engine = create_engine(url or config.database_url, future=True)
         self._session_factory = sessionmaker(
             bind=self._engine,
             autoflush=False,

@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import os
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -17,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from fabricat_backend.database import UserRepository, UserSchema
 from fabricat_backend.shared import AvatarIcon
+from fabricat_backend.settings import BackendSettings, get_settings
 
 
 class UserAlreadyExistsError(Exception):
@@ -44,8 +44,10 @@ class AuthService:
         secret_key: str | None = None,
         algorithm: str = "HS256",
         access_token_ttl_minutes: int = 60,
+        settings: BackendSettings | None = None,
     ) -> None:
-        self._secret_key = secret_key or os.environ.get("AUTH_SECRET_KEY", "change-me")
+        config = settings or get_settings()
+        self._secret_key = secret_key or config.auth_secret_key
         self._algorithm = algorithm
         self._access_token_ttl = timedelta(minutes=access_token_ttl_minutes)
 
