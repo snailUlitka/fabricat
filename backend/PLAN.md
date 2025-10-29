@@ -1,8 +1,8 @@
 # Game Logic Implementation Plan
 
 ## Milestone 1 — Requirements & Design Alignment
-- [ ] Identify core domain entities (player, inventory, factories, loans, market) and sketch their responsibilities/interfaces.
-- [ ] Define data flow for a single month: how state enters each phase, what side effects it produces, and what must be persisted/logged.
+- [x] Identify core domain entities (player, inventory, factories, loans, market) and sketch their responsibilities/interfaces. (Documented in `docs/domain_overview.md`.)
+- [x] Define data flow for a single month: how state enters each phase, what side effects it produces, and what must be persisted/logged. (See `docs/domain_overview.md`.)
 
 ## Milestone 2 — Domain Foundations
 - [ ] Create configuration module for default economic parameters and lobby overrides (default should stores in .env and processes via pydantic settings).
