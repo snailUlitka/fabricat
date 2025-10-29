@@ -85,7 +85,8 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D", "S101", "PLR2004", "ANN201"]
+"alembic/*" = ["ALL"]
+"tests/*" = ["D", "S101", "PLR2004", "ANN201", "ANN401", "SLF001", "INP001"]
 
 [tool.ruff.format]
 quote-style = "double"

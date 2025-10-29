@@ -1,6 +1,6 @@
 """WebSocket endpoints for gameplay sessions."""
 
-from __future__ import annotations
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket, status
 
@@ -12,10 +12,10 @@ router = APIRouter(tags=["session"])
 
 @router.websocket("/ws/game")
 async def game_session(
-    websocket: WebSocket, auth_service: AuthService = Depends(get_auth_service)
+    websocket: WebSocket,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> None:
-    """Simple authenticated WebSocket placeholder for the game session."""
-
+    """WebSocket placeholder for the game session."""
     token = websocket.query_params.get("token")
     if token is None:
         await websocket.close(
@@ -25,7 +25,7 @@ async def game_session(
 
     try:
         auth_service.decode_access_token(token)
-    except Exception:  # pragma: no cover - pyjwt raises multiple subclasses
+    except Exception:  # noqa: BLE001
         await websocket.close(
             code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
         )

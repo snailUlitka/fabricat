@@ -1,6 +1,6 @@
 """Authentication endpoints."""
 
-from __future__ import annotations
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -26,16 +26,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post(
     "/register",
-    response_model=UserRegisterResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def register_user(
     payload: UserRegisterRequest,
-    session: Session = Depends(get_session),
-    auth_service: AuthService = Depends(get_auth_service),
+    session: Annotated[Session, Depends(get_session)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserRegisterResponse:
     """Register a new user and issue an access token."""
-
     try:
         user, token = auth_service.register_user(
             session=session,
@@ -53,14 +51,13 @@ def register_user(
     return UserRegisterResponse(user=user_model, token=token_model)
 
 
-@router.post("/login", response_model=UserLoginResponse)
+@router.post("/login")
 def login_user(
     payload: UserLoginRequest,
-    session: Session = Depends(get_session),
-    auth_service: AuthService = Depends(get_auth_service),
+    session: Annotated[Session, Depends(get_session)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> UserLoginResponse:
     """Authenticate an existing user using nickname and password."""
-
     try:
         user, token = auth_service.authenticate_user(
             session=session, nickname=payload.nickname, password=payload.password

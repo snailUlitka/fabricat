@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from datetime import datetime, timezone
-from typing import Any
-from uuid import UUID
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 from fabricat_backend.api import create_api
 from fabricat_backend.database import UserSchema, get_session
+
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterator
+    from uuid import UUID
 
 
 class FakeUserRepository:
@@ -20,7 +22,7 @@ class FakeUserRepository:
     ) -> None:  # pragma: no cover - session unused in fake repo
         self._session = session
 
-    _store: dict[UUID, UserSchema] = {}
+    _store: dict[UUID, UserSchema] = {}  # noqa: RUF012
 
     @classmethod
     def reset(cls) -> None:
@@ -37,7 +39,7 @@ class FakeUserRepository:
 
     def add(self, user: UserSchema) -> UserSchema:
         if getattr(user, "created_at", None) is None:
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
             user.created_at = timestamp
             user.updated_at = timestamp
         type(self)._store[user.id] = user
@@ -51,7 +53,7 @@ def reset_repo() -> Iterator[None]:
     FakeUserRepository.reset()
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setattr(
         "fabricat_backend.api.services.auth.UserRepository", FakeUserRepository
@@ -62,7 +64,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
     app = create_api()
 
-    def override_session():
+    def override_session() -> Generator[None, None, None]:
         yield None
 
     app.dependency_overrides[get_session] = override_session
@@ -81,7 +83,7 @@ def test_register_user_success(client: TestClient) -> None:
 
     assert response.status_code == 201
     data = response.json()
-    assert data["token"]["token_type"] == "bearer"
+    assert data["token"]["token_type"] == "bearer"  # noqa: S105
     assert data["user"]["nickname"] == payload["nickname"]
     assert "access_token" in data["token"]
 
@@ -115,7 +117,7 @@ def test_login_user_success(client: TestClient) -> None:
 
     assert response.status_code == 200
     data = response.json()
-    assert data["token"]["token_type"] == "bearer"
+    assert data["token"]["token_type"] == "bearer"  # noqa: S105
     assert data["user"]["nickname"] == register_payload["nickname"]
 
 

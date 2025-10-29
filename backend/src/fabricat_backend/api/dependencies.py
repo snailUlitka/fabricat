@@ -1,7 +1,6 @@
 """Dependency providers for FastAPI routers."""
 
-from __future__ import annotations
-
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -10,25 +9,24 @@ from sqlalchemy.orm import Session
 
 from fabricat_backend.api.services import AuthService
 from fabricat_backend.database import UserRepository, get_session
-from fabricat_backend.settings import get_settings
+from fabricat_backend.database.schemas.user import UserSchema
+from fabricat_backend.settings import BackendSettings, get_settings
 
 _security = HTTPBearer(auto_error=False)
-_auth_service = AuthService(settings=get_settings())
+SettingsDep = Annotated[BackendSettings, Depends(get_settings)]
 
 
-def get_auth_service() -> AuthService:
-    """Return the shared :class:`AuthService` instance."""
-
-    return _auth_service
+def get_auth_service(settings: SettingsDep) -> AuthService:
+    """Instantiate :class:`AuthService` bound to application settings."""
+    return AuthService(settings=settings)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_security),
-    session: Session = Depends(get_session),
-    auth_service: AuthService = Depends(get_auth_service),
-):
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_security)],
+    session: Annotated[Session, Depends(get_session)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> UserSchema:
     """Resolve the authenticated user from a bearer token."""
-
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing credentials"

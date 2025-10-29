@@ -1,14 +1,11 @@
 """Pydantic models for authentication endpoints."""
 
-from __future__ import annotations
-
 from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from fabricat_backend.shared import AvatarIcon
-
 
 NICKNAME_PATTERN = r"^[A-Za-z0-9_]{3,32}$"
 PASSWORD_MIN_LENGTH = 8
@@ -31,7 +28,7 @@ class AuthTokenResponse(BaseModel):
     """Bearer token payload returned by the API."""
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105
 
 
 class UserRegisterRequest(BaseModel):
@@ -46,6 +43,7 @@ class UserRegisterRequest(BaseModel):
     @field_validator("nickname")
     @classmethod
     def validate_nickname(cls, value: str) -> str:
+        """Validate user's nickname by rules."""
         if not value.strip():
             msg = "nickname must not be empty"
             raise ValueError(msg)
@@ -54,6 +52,7 @@ class UserRegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
+        """Validate user's password by rules."""
         if not any(char.isalpha() for char in value):
             msg = "password must contain at least one letter"
             raise ValueError(msg)
@@ -81,6 +80,7 @@ class UserLoginRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
+        """Validate user's password by rules."""
         if not any(char.isalpha() for char in value):
             msg = "password must contain at least one letter"
             raise ValueError(msg)
