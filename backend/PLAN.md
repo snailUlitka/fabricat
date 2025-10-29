@@ -5,10 +5,10 @@
 - [x] Define data flow for a single month: how state enters each phase, what side effects it produces, and what must be persisted/logged. (See `docs/domain_overview.md`.)
 
 ## Milestone 2 — Domain Foundations
-- [ ] Create configuration module for default economic parameters and lobby overrides (default should stores in .env and processes via pydantic settings).
-- [ ] Implement immutable value objects for money, resources, seniority order, and phase identifiers.
-- [ ] Model player/company state containers that track cash, inventory, factories (active, under construction, upgrading), and loans.
-- [ ] Introduce deterministic RNG service with optional seeding for seniority rolls.
+- [x] Create configuration module for default economic parameters and lobby overrides (default should stores in .env and processes via pydantic settings).
+- [x] Implement immutable value objects for money, resources, seniority order, and phase identifiers.
+- [x] Model player/company state containers that track cash, inventory, factories (active, under construction, upgrading), and loans.
+- [x] Introduce deterministic RNG service with optional seeding for seniority rolls.
 
 ## Milestone 3 — Phase Engine Skeleton
 - [ ] Implement a `MonthEngine` (or similar orchestrator) that enforces the fixed phase order and produces phase results.
