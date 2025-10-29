@@ -26,9 +26,9 @@
 - [x] Implement end-of-month wrap-up: bankruptcy elimination, seniority rotation, and capital recomputation.
 
 ## Milestone 5 — Persistence & Integration Hooks
-- [ ] Define interfaces for persisting game state snapshots and logs (placeholder adapters until database layer exists).
-- [ ] Expose orchestration entry points that the API layer can call (start session, process phase submissions, advance month).
-- [ ] Document orchestration contracts in module docstrings for future API integration.
+- [x] Define interfaces for persisting game state snapshots and logs (placeholder adapters until database layer exists).
+- [x] Expose orchestration entry points that the API layer can call (start session, process phase submissions, advance month).
+- [x] Document orchestration contracts in module docstrings for future API integration.
 
 ## Milestone 6 — Validation & Tooling
 - [ ] Add focused unit tests for each phase and tie-break scenario using deterministic fixtures.
