@@ -18,6 +18,17 @@ from fabricat_backend.game_logic.handlers import (
     ProductionPhaseHandlerImpl,
     RawMaterialPurchasePhaseHandlerImpl,
 )
+from fabricat_backend.game_logic.orchestration import (
+    SessionNotInitializedError,
+    SessionOrchestrator,
+)
+from fabricat_backend.game_logic.persistence import (
+    GameStateSnapshot,
+    GameStateStore,
+    InMemoryGameStateStore,
+    InMemoryMonthLogStore,
+    MonthLogStore,
+)
 from fabricat_backend.game_logic.phases import (
     PhaseHandlers,
     PhaseInputBase,
@@ -43,6 +54,10 @@ __all__ = [
     "FactoryRecord",
     "FactoryStatus",
     "FinishedGoodsSalePhaseHandlerImpl",
+    "GameStateSnapshot",
+    "GameStateStore",
+    "InMemoryGameStateStore",
+    "InMemoryMonthLogStore",
     "InventoryLedger",
     "LoanAccount",
     "LoanManagementPhaseHandlerImpl",
@@ -50,12 +65,15 @@ __all__ = [
     "MarketAnnouncementPhaseHandlerImpl",
     "MonthContext",
     "MonthEngine",
+    "MonthLogStore",
     "MonthResult",
     "PhaseHandlers",
     "PhaseInputBase",
     "PhaseResultBase",
     "ProductionPhaseHandlerImpl",
     "RawMaterialPurchasePhaseHandlerImpl",
+    "SessionNotInitializedError",
+    "SessionOrchestrator",
     "build_lobby_configuration",
     "get_default_economy_configuration",
 ]
