@@ -11,19 +11,19 @@
 - [x] Introduce deterministic RNG service with optional seeding for seniority rolls.
 
 ## Milestone 3 — Phase Engine Skeleton
-- [ ] Implement a `MonthEngine` (or similar orchestrator) that enforces the fixed phase order and produces phase results.
-- [ ] Define per-phase handler interfaces (expenses, market setup, buy RMs, production, sell FGs, loans, construction, end-of-month) with explicit inputs/outputs.
-- [ ] Add shared result/event structures for logging actions and decisions.
+- [x] Implement a `MonthEngine` (or similar orchestrator) that enforces the fixed phase order and produces phase results.
+- [x] Define per-phase handler interfaces (expenses, market setup, buy RMs, production, sell FGs, loans, construction, end-of-month) with explicit inputs/outputs.
+- [x] Add shared result/event structures for logging actions and decisions.
 
 ## Milestone 4 — Phase Implementations
-- [ ] Build expense deduction logic, including bankruptcy checks when funds are insufficient.
-- [ ] Implement market announcement logic, generating volume/price corridors and exposing read-only views to players.
-- [ ] Implement RM purchasing resolution with hidden bids, reveal, priority sorting, and seniority tie-breaks.
-- [ ] Implement production processing respecting factory capacities, launch costs, and resource availability.
-- [ ] Implement FG selling resolution with ceiling pricing and seniority tie-breaks.
-- [ ] Implement loan management: interest accrual, scheduled repayments, debt limit enforcement, loan issuance validation.
-- [ ] Implement construction/upgrade timeline updates, payment scheduling, and factory state transitions.
-- [ ] Implement end-of-month wrap-up: bankruptcy elimination, seniority rotation, and capital recomputation.
+- [x] Build expense deduction logic, including bankruptcy checks when funds are insufficient.
+- [x] Implement market announcement logic, generating volume/price corridors and exposing read-only views to players.
+- [x] Implement RM purchasing resolution with hidden bids, reveal, priority sorting, and seniority tie-breaks.
+- [x] Implement production processing respecting factory capacities, launch costs, and resource availability.
+- [x] Implement FG selling resolution with ceiling pricing and seniority tie-breaks.
+- [x] Implement loan management: interest accrual, scheduled repayments, debt limit enforcement, loan issuance validation.
+- [x] Implement construction/upgrade timeline updates, payment scheduling, and factory state transitions.
+- [x] Implement end-of-month wrap-up: bankruptcy elimination, seniority rotation, and capital recomputation.
 
 ## Milestone 5 — Persistence & Integration Hooks
 - [ ] Define interfaces for persisting game state snapshots and logs (placeholder adapters until database layer exists).

@@ -50,6 +50,11 @@ class Money(BaseModel):
         )
         return Money(amount=new_amount, currency=self.currency)
 
+    @classmethod
+    def zero(cls, currency: str = "USD") -> Money:
+        """Return a monetary value representing zero in *currency*."""
+        return cls(amount=Decimal(0), currency=currency)
+
     def _assert_same_currency(self, other: Money) -> None:
         if self.currency != other.currency:
             msg = f"Currency mismatch: {self.currency} vs {other.currency}."
