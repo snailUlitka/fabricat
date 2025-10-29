@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping  # noqa: TC003
-from decimal import Decimal  # noqa: TC003
+from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, PositiveInt, model_validator
 from pydantic.config import ConfigDict
 
 from fabricat_backend.shared.value_objects import Money, ResourceQuantity, ResourceType
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def _default_inventory() -> tuple[ResourceQuantity, ...]:
@@ -186,6 +189,34 @@ class LoanAccount(BaseModel):
             months_remaining=self.months_remaining - 1,
         )
 
+    def scheduled_payment(self) -> Money:
+        """Return the scheduled payment amount for the upcoming month."""
+        divisor = Decimal(self.months_remaining)
+        amount = (self.principal.amount / divisor).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        return Money(amount=amount, currency=self.principal.currency)
+
+    def apply_payment(self, payment: Money) -> LoanAccount | None:
+        """Apply *payment* towards the principal, returning the updated account."""
+        if payment.currency != self.principal.currency:
+            msg = f"Currency mismatch: {self.principal.currency} vs {payment.currency}."
+            raise ValueError(msg)
+        updated_principal_amount = self.principal.amount - payment.amount
+        if updated_principal_amount <= 0 or self.months_remaining == 1:
+            return None
+        updated_principal = Money(
+            amount=max(updated_principal_amount, Decimal(0)),
+            currency=self.principal.currency,
+        )
+        return LoanAccount(
+            identifier=self.identifier,
+            principal=updated_principal,
+            interest_rate=self.interest_rate,
+            term_months=self.term_months,
+            months_remaining=self.months_remaining - 1,
+        )
+
 
 class CompanyState(BaseModel):
     """Aggregate container capturing all mutable company attributes."""
@@ -218,6 +249,18 @@ class CompanyState(BaseModel):
     def register_loan(self, loan: LoanAccount) -> CompanyState:
         """Return a new state with *loan* appended to outstanding accounts."""
         return self.model_copy(update={"loans": (*self.loans, loan)})
+
+    def replace_loans(self, loans: tuple[LoanAccount, ...]) -> CompanyState:
+        """Return a state with the loan portfolio replaced by *loans*."""
+        return self.model_copy(update={"loans": loans})
+
+    def replace_factories(self, portfolio: FactoryPortfolio) -> CompanyState:
+        """Return a state with factories swapped for *portfolio*."""
+        return self.model_copy(update={"factories": portfolio})
+
+    def with_inventory(self, ledger: InventoryLedger) -> CompanyState:
+        """Return a state with inventory replaced by *ledger*."""
+        return self.model_copy(update={"inventory": ledger})
 
 
 __all__ = [

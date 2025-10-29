@@ -6,7 +6,6 @@ from collections.abc import (
     Callable,
     Mapping,
 )
-from dataclasses import dataclass
 from decimal import Decimal  # noqa: TC003
 from typing import Protocol
 
@@ -194,9 +193,10 @@ class EndOfMonthPhaseHandler(Protocol):
 PhaseHandlerCallable = Callable[[PhaseInputBase], PhaseResultBase]
 
 
-@dataclass(frozen=True)
-class PhaseHandlers:
+class PhaseHandlers(BaseModel):
     """Collection of strongly-typed phase handlers for the month engine."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     expenses: ExpensesPhaseHandler
     market_announcement: MarketAnnouncementPhaseHandler
