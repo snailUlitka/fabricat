@@ -1,13 +1,19 @@
-"""Models used for API request and response payloads.
+"""Models used for API request and response payloads."""
 
-Example: ./user.py with
-class UserResponse(BaseModel): ...
+from fabricat_backend.api.models.auth import (
+    AuthTokenResponse,
+    UserLoginRequest,
+    UserLoginResponse,
+    UserRegisterRequest,
+    UserRegisterResponse,
+    UserResponse,
+)
 
-class UserRequest(BaseModel): ...
-
-Name convention for API models: <Noun>{Response, Request}
-
-Where:
-    Response - returns from API
-    Request - gets from user
-"""
+__all__ = [
+    "AuthTokenResponse",
+    "UserLoginRequest",
+    "UserLoginResponse",
+    "UserRegisterRequest",
+    "UserRegisterResponse",
+    "UserResponse",
+]
