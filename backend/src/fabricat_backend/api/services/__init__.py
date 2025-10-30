@@ -6,9 +6,15 @@ from fabricat_backend.api.services.auth import (
     TokenPayload,
     UserAlreadyExistsError,
 )
+from fabricat_backend.api.services.game_session import (
+    DecisionSubmission,
+    GameSessionService,
+)
 
 __all__ = [
     "AuthService",
+    "DecisionSubmission",
+    "GameSessionService",
     "InvalidCredentialsError",
     "TokenPayload",
     "UserAlreadyExistsError",
