@@ -7,7 +7,7 @@ from collections.abc import (
     Mapping,
 )
 from decimal import Decimal  # noqa: TC003
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic.config import ConfigDict
@@ -128,6 +128,7 @@ class EndOfMonthPhaseResult(PhaseResultBase):
     """Structured result for the end-of-month wrap-up phase."""
 
 
+@runtime_checkable
 class ExpensesPhaseHandler(Protocol):
     """Interface implemented by the expenses phase handler."""
 
@@ -135,6 +136,7 @@ class ExpensesPhaseHandler(Protocol):
         """Process the expenses phase and return its result."""
 
 
+@runtime_checkable
 class MarketAnnouncementPhaseHandler(Protocol):
     """Interface implemented by the market announcement phase handler."""
 
@@ -144,6 +146,7 @@ class MarketAnnouncementPhaseHandler(Protocol):
         """Process the market announcement phase and return its result."""
 
 
+@runtime_checkable
 class RawMaterialPurchasePhaseHandler(Protocol):
     """Interface implemented by the raw material purchase phase handler."""
 
@@ -153,6 +156,7 @@ class RawMaterialPurchasePhaseHandler(Protocol):
         """Process the raw material purchase phase and return its result."""
 
 
+@runtime_checkable
 class ProductionPhaseHandler(Protocol):
     """Interface implemented by the production phase handler."""
 
@@ -160,6 +164,7 @@ class ProductionPhaseHandler(Protocol):
         """Process the production phase and return its result."""
 
 
+@runtime_checkable
 class FinishedGoodsSalePhaseHandler(Protocol):
     """Interface implemented by the finished goods sale phase handler."""
 
@@ -169,6 +174,7 @@ class FinishedGoodsSalePhaseHandler(Protocol):
         """Process the finished goods sale phase and return its result."""
 
 
+@runtime_checkable
 class LoanManagementPhaseHandler(Protocol):
     """Interface implemented by the loan management phase handler."""
 
@@ -176,6 +182,7 @@ class LoanManagementPhaseHandler(Protocol):
         """Process the loan management phase and return its result."""
 
 
+@runtime_checkable
 class ConstructionPhaseHandler(Protocol):
     """Interface implemented by the construction and upgrade phase handler."""
 
@@ -183,6 +190,7 @@ class ConstructionPhaseHandler(Protocol):
         """Process the construction phase and return its result."""
 
 
+@runtime_checkable
 class EndOfMonthPhaseHandler(Protocol):
     """Interface implemented by the end-of-month wrap-up phase handler."""
 
