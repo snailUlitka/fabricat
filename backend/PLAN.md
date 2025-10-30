@@ -31,10 +31,10 @@
 - [x] Document orchestration contracts in module docstrings for future API integration.
 
 ## Milestone 6 — Validation & Tooling
-- [ ] Add focused unit tests for each phase and tie-break scenario using deterministic fixtures.
-- [ ] Add integration-style tests simulating a full month with multiple players and varied bids.
-- [ ] Ensure `uv run ruff format`, `uv run ruff check`, and `uv run pytest` pass locally.
-- [ ] Update relevant `AGENTS.md` files with new commands/conventions if tooling or workflows change.
+- [x] Add focused unit tests for each phase and tie-break scenario using deterministic fixtures.
+- [x] Add integration-style tests simulating a full month with multiple players and varied bids.
+- [x] Ensure `uv run ruff format`, `uv run ruff check`, and `uv run pytest` pass locally.
+- [x] Update relevant `AGENTS.md` files with new commands/conventions if tooling or workflows change.
 
 ## Milestone 7 — Future Enhancements (Backlog)
 - [ ] Extend plan to cover AI/bot players and analytics once core engine is stable.
