@@ -8,9 +8,33 @@ from fabricat_backend.api.models.auth import (
     UserRegisterResponse,
     UserResponse,
 )
+from fabricat_backend.api.models.session import (
+    GameSessionAckResponse,
+    GameSessionAdvanceMonthRequest,
+    GameSessionDecisionRequest,
+    GameSessionDecisionsStoredResponse,
+    GameSessionErrorResponse,
+    GameSessionJoinRequest,
+    GameSessionMonthResultResponse,
+    GameSessionRequest,
+    GameSessionSettingsResponse,
+    GameSessionStateResponse,
+    GameSessionSubmitDecisionsRequest,
+)
 
 __all__ = [
     "AuthTokenResponse",
+    "GameSessionAckResponse",
+    "GameSessionAdvanceMonthRequest",
+    "GameSessionDecisionRequest",
+    "GameSessionDecisionsStoredResponse",
+    "GameSessionErrorResponse",
+    "GameSessionJoinRequest",
+    "GameSessionMonthResultResponse",
+    "GameSessionRequest",
+    "GameSessionSettingsResponse",
+    "GameSessionStateResponse",
+    "GameSessionSubmitDecisionsRequest",
     "UserLoginRequest",
     "UserLoginResponse",
     "UserRegisterRequest",

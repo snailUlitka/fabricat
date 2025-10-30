@@ -1,5 +1,6 @@
 """Dependency providers for FastAPI routers."""
 
+from functools import cache
 from typing import Annotated
 from uuid import UUID
 
@@ -7,7 +8,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from fabricat_backend.api.services import AuthService
+from fabricat_backend.api.services import AuthService, GameSessionService
 from fabricat_backend.database import UserRepository, get_session
 from fabricat_backend.database.schemas.user import UserSchema
 from fabricat_backend.settings import BackendSettings, get_settings
@@ -56,4 +57,14 @@ def get_current_user(
     return user
 
 
-__all__ = ["get_auth_service", "get_current_user"]
+@cache
+def get_game_session_service() -> GameSessionService:
+    """Return the shared :class:`GameSessionService` instance."""
+    return GameSessionService.create_default()
+
+
+__all__ = [
+    "get_auth_service",
+    "get_current_user",
+    "get_game_session_service",
+]
