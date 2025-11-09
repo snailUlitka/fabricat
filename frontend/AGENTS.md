@@ -28,6 +28,12 @@ If you need to communicate with the backend during development, configure enviro
 - Validate production builds: `npm run build` (Turbopack is enabled by default; fall back to webpack via `NEXT_DISABLE_TURBOPACK=1` if debugging bundler issues).
 - If you add unit tests, colocate them with components (e.g., `Button.test.jsx`) and document the test runner command in the repository-level `AGENTS.md`.
 
+## Current UI prototype
+- The root route renders `src/components/home-page.jsx`, which handles auth via `/auth/register` and `/auth/login`, stores the bearer token in `localStorage`, and shows the active console once authenticated.
+- `src/components/auth/AuthPanel.jsx` collects nickname/password/icon data and passes it directly to the FastAPI backend.
+- `src/components/game/GameConsole.jsx` connects to the WebSocket endpoint (`ws://localhost:8000/ws/game` by default), streams ticks/reports, and exposes forms for each gameplay phase (buy/production/sell/loans/construction).
+- `src/lib/apiClient.js` centralizes the API base URLs; override them with `NEXT_PUBLIC_API_BASE` if the backend runs on another host/port. WebSocket URLs are derived automatically from this base.
+
 ## Dependency management
 - Use npm for installs. Add runtime dependencies with `npm install <package>` and dev tools with `npm install -D <package>`.
 - Commit the updated `package-lock.json`. Avoid editing it manually.
