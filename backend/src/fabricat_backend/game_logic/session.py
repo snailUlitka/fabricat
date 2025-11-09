@@ -1,8 +1,10 @@
 """Session manager for multiplayer and multi-session games."""
 
-from typing import Literal
-from pydantic import BaseModel, Field
+from math import ceil
 from random import Random
+from typing import Literal
+
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class GameSettings(BaseModel):
@@ -17,6 +19,7 @@ class GameSettings(BaseModel):
     rng_seed: int = 42
 
     start_factory_count: int
+    max_months: int
 
     basic_factory_monthly_expenses: float
     auto_factory_monthly_expenses: float
@@ -24,16 +27,23 @@ class GameSettings(BaseModel):
     raw_material_monthly_expenses: float
     finished_good_monthly_expenses: float
 
+    basic_factory_launch_cost: float
+    auto_factory_launch_cost: float
+
     bank_start_money: float
 
     loans_monthly_expenses_in_percents: float
     available_loans: list[float]
+    loan_terms_in_months: list[int]
 
     bank_raw_material_sell_volume_range: tuple[int, int]
     bank_finished_good_buy_volume_range: tuple[int, int]
 
     bank_raw_material_sell_min_price_range: tuple[float, float]
     bank_finished_good_buy_max_price_range: tuple[float, float]
+
+    max_raw_material_storage: int
+    max_finished_good_storage: int
 
     month_for_upgrade: int
     upgrade_cost: float
@@ -43,6 +53,14 @@ class GameSettings(BaseModel):
 
     month_for_build_auto: int
     build_auto_cost: float
+
+
+    build_basic_payment_share: float
+    build_basic_final_payment_offset: int
+    build_auto_payment_share: float
+    build_auto_final_payment_offset: int
+
+    max_factories: int
 
 
 class RawMaterial(BaseModel):
@@ -83,6 +101,8 @@ class Factory(BaseModel):
 
     end_build_month: int | None = None
     end_upgrade_month: int | None = None
+    next_payment_month: int | None = None
+    next_payment_amount: float = 0.0
 
 
 class Bid(BaseModel):
@@ -151,6 +171,19 @@ class Player(BaseModel):
 
     loans: list[Loan] = Field(default_factory=lambda: [Loan(), Loan()])
 
+    def pay(self, amount: float) -> bool:
+        """Attempt to deduct money; bankrupt immediately if funds are insufficient."""
+        if amount <= 0:
+            return True
+
+        if self.money < amount:
+            self.money = 0.0
+            self.is_bankrupt = True
+            return False
+
+        self.money -= amount
+        return True
+
     def collect_expenses(self) -> None:
         """Apply the monthly upkeep of every owned asset to the cash balance.
 
@@ -160,13 +193,16 @@ class Player(BaseModel):
         """
 
         for factory in self.factories:
-            self.money -= factory.monthly_expenses
+            if not self.pay(factory.monthly_expenses):
+                return
 
         for raw_material in self.raw_materials:
-            self.money -= raw_material.monthly_expenses
+            if not self.pay(raw_material.monthly_expenses):
+                return
 
         for finished_good in self.finished_goods:
-            self.money -= finished_good.monthly_expenses
+            if not self.pay(finished_good.monthly_expenses):
+                return
 
 
 class Bank(BaseModel):
@@ -177,11 +213,15 @@ class Bank(BaseModel):
     unpredictable while remaining reproducible through the session RNG seed.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     rng: Random
 
     money: float
 
     available_loans: list[float]
+    loan_nominals: list[float]
+    loan_terms_in_months: list[int]
 
     raw_material_sell_volume: int = 0
     finished_good_buy_volume: int = 0
@@ -233,9 +273,13 @@ class GameState(BaseModel):
     """
 
     month: int = 1
+    max_months: int
 
     raw_material_monthly_expenses: float
     finished_good_monthly_expenses: float
+
+    basic_factory_launch_cost: float
+    auto_factory_launch_cost: float
 
     basic_factory_production: int = 1
     auto_factory_production: int = 2
@@ -254,6 +298,14 @@ class GameState(BaseModel):
     month_for_build_auto: int
     build_auto_cost: float
 
+    max_raw_material_storage: int
+    max_finished_good_storage: int
+    build_basic_payment_share: float
+    build_basic_final_payment_offset: int
+    build_auto_payment_share: float
+    build_auto_final_payment_offset: int
+    max_factories: int
+
 
 class GameSession:
     """High-level orchestrator that plays out the economic game loop.
@@ -271,6 +323,9 @@ class GameSession:
         gameplay methods run.
         """
         self._players = players
+        self._total_players = len(players)
+        self._is_finished = False
+        self._winner_id: int | None = None
 
         self._init_game(settings)
         self._init_factories(settings)
@@ -299,8 +354,11 @@ class GameSession:
         inventories are populated.
         """
         self._state = GameState(
+            max_months=settings.max_months,
             raw_material_monthly_expenses=settings.raw_material_monthly_expenses,
             finished_good_monthly_expenses=settings.finished_good_monthly_expenses,
+            basic_factory_launch_cost=settings.basic_factory_launch_cost,
+            auto_factory_launch_cost=settings.auto_factory_launch_cost,
             loans_monthly_expenses_in_percents=settings.loans_monthly_expenses_in_percents,
             month_for_upgrade=settings.month_for_upgrade,
             upgrade_cost=settings.upgrade_cost,
@@ -310,27 +368,126 @@ class GameSession:
             build_auto_cost=settings.build_auto_cost,
             basic_factory_monthly_expenses=settings.basic_factory_monthly_expenses,
             auto_factory_monthly_expenses=settings.auto_factory_monthly_expenses,
+            max_raw_material_storage=settings.max_raw_material_storage,
+            max_finished_good_storage=settings.max_finished_good_storage,
+            build_basic_payment_share=settings.build_basic_payment_share,
+            build_basic_final_payment_offset=settings.build_basic_final_payment_offset,
+            build_auto_payment_share=settings.build_auto_payment_share,
+            build_auto_final_payment_offset=settings.build_auto_final_payment_offset,
+            max_factories=settings.max_factories,
         )
+        if len(settings.available_loans) != len(settings.loan_terms_in_months):
+            msg = "Loan amounts and term configuration mismatch."
+            raise ValueError(msg)
         self._bank = Bank(
             rng=Random(settings.rng_seed),  # noqa: S311
             money=settings.bank_start_money,
-            available_loans=settings.available_loans,
+            available_loans=list(settings.available_loans),
+            loan_nominals=list(settings.available_loans),
+            loan_terms_in_months=settings.loan_terms_in_months,
             raw_material_sell_volume_range=settings.bank_raw_material_sell_volume_range,
             finished_good_buy_volume_range=settings.bank_finished_good_buy_volume_range,
             raw_material_sell_min_price_range=settings.bank_raw_material_sell_min_price_range,
             finished_good_buy_max_price_range=settings.bank_finished_good_buy_max_price_range,
         )
 
+    def _active_players(self) -> list[Player]:
+        """Return non-bankrupt players."""
+        return [player for player in self._players if not player.is_bankrupt]
+
+    def _completed_months(self) -> int:
+        """Number of fully completed months."""
+        return max(self._state.month - 1, 0)
+
+    def _determine_winner_id(self, candidates: list[Player]) -> int | None:
+        """Pick the player with the highest capital (tie-break by priority/id)."""
+        if not candidates:
+            return None
+
+        best_player = max(
+            candidates,
+            key=lambda player: (
+                self.calculate_capital(player),
+                -player.priority,
+                -player.id_,
+            ),
+        )
+        return best_player.id_
+
+    def _evaluate_game_completion(self) -> None:
+        """Stop the session once victory conditions trigger."""
+        if self._is_finished:
+            return
+
+        active_players = self._active_players()
+
+        if self._total_players > 1 and len(active_players) <= 1:
+            self._is_finished = True
+            self._winner_id = active_players[0].id_ if active_players else None
+            return
+
+        if self._completed_months() >= self._state.max_months:
+            self._is_finished = True
+            self._winner_id = self._determine_winner_id(active_players)
+
+    def calculate_capital(self, player: Player) -> float:
+        """Compute the player's capital snapshot."""
+        factory_value = 0.0
+        outstanding_payments = 0.0
+
+        for factory in player.factories:
+            match factory.factory_type:
+                case "auto" | "builds_auto":
+                    factory_value += self._state.build_auto_cost
+                case "basic" | "builds_basic" | "upgrades":
+                    factory_value += self._state.build_basic_cost
+            outstanding_payments += max(factory.next_payment_amount, 0.0)
+
+        raw_value = (
+            len(player.raw_materials) * self._bank.raw_material_sell_min_price
+        )
+        finished_value = (
+            len(player.finished_goods) * self._bank.finished_good_buy_max_price
+        )
+        loan_debt = sum(
+            loan.amount for loan in player.loans if loan.loan_status == "in_progress"
+        )
+
+        return (
+            player.money
+            + factory_value
+            + raw_value
+            + finished_value
+            - loan_debt
+            - outstanding_payments
+        )
+
+    @property
+    def is_finished(self) -> bool:
+        """Whether the session already satisfied a victory condition."""
+        return self._is_finished
+
+    @property
+    def winner(self) -> Player | None:
+        """Return the winning player, if determined."""
+        if self._winner_id is None:
+            return None
+
+        return next((p for p in self._players if p.id_ == self._winner_id), None)
+
     @staticmethod
     def _sort_players_buy(player: Player) -> tuple[float, int]:
         """Return a composite key for ordering buy bids.
 
-        Lower bid prices sort toward the front, and ties fall back to player
-        priority so the most privileged player gets first access when supply is
-        scarce.
+        Higher bid prices go first, and ties fall back to player priority so
+        the most privileged player gets first access when supply is scarce.
         """
         bid = player.buy_bid
-        return bid.price if bid else -1, -player.priority
+        if bid is None:
+            return float("inf"), player.priority
+
+        # Higher bid price should go first, then the smallest priority value.
+        return -bid.price, player.priority
 
     @staticmethod
     def _sort_players_sell(player: Player) -> tuple[float, int]:
@@ -340,7 +497,10 @@ class GameSession:
         collisions when the bank cannot purchase every unit on offer.
         """
         bid = player.sell_bid
-        return bid.price if bid else -1, -player.priority
+        if bid is None:
+            return float("inf"), player.priority
+
+        return bid.price, player.priority
 
     def collect_expenses(self) -> None:
         """Apply operating costs to every player.
@@ -348,8 +508,16 @@ class GameSession:
         Delegates to each player's `collect_expenses` so all ongoing costs are
         deducted before market interactions begin for the month.
         """
+        if self._is_finished:
+            return
+
         for player in self._players:
+            if player.is_bankrupt:
+                continue
+
             player.collect_expenses()
+
+        self._evaluate_game_completion()
 
     def set_market(self) -> None:
         """Refresh the bank's market conditions for the new month.
@@ -357,33 +525,98 @@ class GameSession:
         The bank samples new ranges for supply, demand, and price, creating a
         fresh environment for the upcoming buy and sell phases.
         """
+        if self._is_finished:
+            return
+
         self._bank.set_market()
 
     def process_buy_bids(self) -> None:
         """Execute buy orders against the bank's raw material supply.
 
         Players are processed by the sort order provided in `_sort_players_buy`,
-        prioritizing cheaper bids before falling back to turn priority. Every
-        successful purchase transfers money to the bank and grants the player
-        a fresh `RawMaterial` entry subject to ongoing expenses.
+        prioritizing higher bid prices before falling back to turn priority.
+        Every successful purchase transfers money to the bank and grants the
+        player a fresh `RawMaterial` entry subject to ongoing expenses.
         """
+        if self._is_finished:
+            return
+
         for player in sorted(self._players, key=GameSession._sort_players_buy):
-            if player.buy_bid is None:
+            if player.is_bankrupt or player.buy_bid is None:
                 continue
 
             bid = player.buy_bid
+            if bid.quantity <= 0:
+                continue
 
-            for _ in range(bid.quantity):
-                if self._bank.raw_material_sell_volume > 0:
-                    self._bank.raw_material_sell_volume -= 1
-                    self._bank.money += bid.price
+            if bid.price < self._bank.raw_material_sell_min_price:
+                continue
 
-                    player.money -= bid.price
-                    player.raw_materials.append(
-                        RawMaterial(
-                            monthly_expenses=self._state.raw_material_monthly_expenses,
-                        )
+            purchased = 0
+
+            while (
+                purchased < bid.quantity
+                and self._bank.raw_material_sell_volume > 0
+                and len(player.raw_materials) < self._state.max_raw_material_storage
+                and player.money >= bid.price
+            ):
+                self._bank.raw_material_sell_volume -= 1
+                self._bank.money += bid.price
+
+                player.money -= bid.price
+                player.raw_materials.append(
+                    RawMaterial(
+                        monthly_expenses=self._state.raw_material_monthly_expenses,
                     )
+                )
+                purchased += 1
+
+    @staticmethod
+    def _resolve_production_runs(
+        *,
+        requested_units: int,
+        factory_count: int,
+        units_per_factory: int,
+        available_rm: int,
+        available_fg_space: int,
+        available_money: float,
+        launch_cost: float,
+    ) -> tuple[int, int, float]:
+        """Return produced units, runs performed, and total launch cost."""
+        if (
+            requested_units <= 0
+            or factory_count <= 0
+            or available_rm <= 0
+            or available_fg_space <= 0
+        ):
+            return 0, 0, 0.0
+
+        max_units = min(
+            requested_units,
+            factory_count * units_per_factory,
+            available_rm,
+            available_fg_space,
+        )
+
+        if max_units <= 0:
+            return 0, 0, 0.0
+
+        runs_needed = ceil(max_units / units_per_factory)
+        if launch_cost <= 0:
+            affordable_runs = runs_needed
+        else:
+            affordable_runs = min(
+                runs_needed,
+                int(available_money // launch_cost),
+            )
+
+        if affordable_runs <= 0:
+            return 0, 0, 0.0
+
+        produced_units = min(max_units, affordable_runs * units_per_factory)
+        runs_performed = ceil(produced_units / units_per_factory)
+        cost = runs_performed * launch_cost
+        return produced_units, runs_performed, cost
 
     def start_production(self) -> None:
         """Consume raw materials to produce finished goods within capacity.
@@ -392,38 +625,83 @@ class GameSession:
         factory types, respects requested production calls, and converts the
         necessary raw materials into finished goods.
         """
+        if self._is_finished:
+            return
+
         for player in self._players:
-            basic_count = sum(
-                self._state.basic_factory_production
-                for f in player.factories
-                if f.factory_type == "basic"
-            )
-            auto_count = sum(
-                self._state.auto_factory_production
-                for f in player.factories
-                if f.factory_type == "auto"
+            if player.is_bankrupt:
+                continue
+
+            available_rm = len(player.raw_materials)
+            available_fg_space = (
+                self._state.max_finished_good_storage - len(player.finished_goods)
             )
 
-            success_call_basic = min(
-                basic_count,
-                player.production_call_for_basic,
+            if available_rm <= 0 or available_fg_space <= 0:
+                continue
+
+            basic_factories = sum(
+                1
+                for factory in player.factories
+                if factory.factory_type in {"basic", "upgrades"}
+            )
+            auto_factories = sum(
+                1 for factory in player.factories if factory.factory_type == "auto"
             )
 
-            success_call_auto = min(
-                auto_count,
-                player.production_call_for_auto,
+            basic_units, _, basic_cost = self._resolve_production_runs(
+                requested_units=player.production_call_for_basic,
+                factory_count=basic_factories,
+                units_per_factory=self._state.basic_factory_production,
+                available_rm=available_rm,
+                available_fg_space=available_fg_space,
+                available_money=player.money,
+                launch_cost=self._state.basic_factory_launch_cost,
             )
 
-            player.production_call_for_basic -= success_call_basic
-            player.production_call_for_auto -= success_call_auto
-
-            for _ in range(success_call_basic + success_call_auto):
-                player.raw_materials.pop()
-                player.finished_goods.append(
-                    FinishedGood(
-                        monthly_expenses=self._state.finished_good_monthly_expenses,
-                    )
+            if basic_units > 0 and player.pay(basic_cost):
+                available_rm -= basic_units
+                available_fg_space -= basic_units
+                player.production_call_for_basic = max(
+                    player.production_call_for_basic - basic_units,
+                    0,
                 )
+            else:
+                basic_units = 0
+
+            auto_units, _, auto_cost = self._resolve_production_runs(
+                requested_units=player.production_call_for_auto,
+                factory_count=auto_factories,
+                units_per_factory=self._state.auto_factory_production,
+                available_rm=available_rm,
+                available_fg_space=available_fg_space,
+                available_money=player.money,
+                launch_cost=self._state.auto_factory_launch_cost,
+            )
+
+            if auto_units > 0 and player.pay(auto_cost):
+                available_rm -= auto_units
+                available_fg_space -= auto_units
+                player.production_call_for_auto = max(
+                    player.production_call_for_auto - auto_units,
+                    0,
+                )
+            else:
+                auto_units = 0
+
+            total_units = basic_units + auto_units
+            if total_units <= 0:
+                continue
+
+            del player.raw_materials[-total_units:]
+            player.finished_goods.extend(
+                FinishedGood(
+                    monthly_expenses=self._state.finished_good_monthly_expenses,
+                )
+                for _ in range(total_units)
+            )
+
+        self._evaluate_game_completion()
 
     def process_sell_bids(self) -> None:
         """Settle sale orders with the bank based on available demand.
@@ -432,19 +710,33 @@ class GameSession:
         honors their offers while the bank still has demand volume, moving cash
         back to the player in exchange for finished goods.
         """
+        if self._is_finished:
+            return
+
         for player in sorted(self._players, key=GameSession._sort_players_sell):
-            if player.sell_bid is None:
+            if player.is_bankrupt or player.sell_bid is None:
                 continue
 
             bid = player.sell_bid
+            if bid.quantity <= 0:
+                continue
 
-            for _ in range(bid.quantity):
-                if self._bank.finished_good_buy_volume > 0:
-                    self._bank.finished_good_buy_volume -= 1
-                    self._bank.money -= bid.price
+            if bid.price > self._bank.finished_good_buy_max_price:
+                continue
 
-                    player.money += bid.price
-                    player.finished_goods.pop()
+            sold = 0
+
+            while (
+                sold < bid.quantity
+                and self._bank.finished_good_buy_volume > 0
+                and player.finished_goods
+            ):
+                self._bank.finished_good_buy_volume -= 1
+                self._bank.money -= bid.price
+
+                player.money += bid.price
+                player.finished_goods.pop()
+                sold += 1
 
     def process_loans(self) -> None:
         """Update loan balances, collect repayments, and fund new calls.
@@ -454,38 +746,71 @@ class GameSession:
         automatically, and new loan requests are funded when the bank has
         available slots.
         """
-        for player in sorted(self._players, key=lambda p: -p.priority):
+        if self._is_finished:
+            return
+
+        for player in sorted(self._players, key=lambda p: p.priority):
+            if player.is_bankrupt:
+                continue
+
             if all(loan.loan_status == "idle" for loan in player.loans):
                 continue
 
-            total_amount = sum(
-                loan.amount
-                for loan in player.loans
-                if loan.loan_status == "in_progress"
-            )
-
-            player.money -= (
-                total_amount * self._state.loans_monthly_expenses_in_percents
-            )
-
-            to_return = sum(
-                loan.amount
-                for loan in player.loans
-                if loan.loan_status == "in_progress"
-                and loan.return_month == self._state.month
-            )
-
-            player.money -= to_return
-
-            for idx, loan in enumerate(player.loans):
-                if loan.loan_status != "call" or self._bank.available_loans[idx] <= 0:
+            for loan in player.loans:
+                if loan.loan_status != "in_progress":
                     continue
 
-                loan.amount += self._bank.available_loans[idx]
-                player.money += self._bank.available_loans[idx]
+                interest = (
+                    loan.amount * self._state.loans_monthly_expenses_in_percents
+                )
+                if interest <= 0:
+                    continue
+
+                if not player.pay(interest):
+                    break
+
+                self._bank.money += interest
+
+            if player.is_bankrupt:
+                continue
+
+            for idx, loan in enumerate(player.loans):
+                if (
+                    loan.loan_status != "in_progress"
+                    or loan.return_month != self._state.month
+                ):
+                    continue
+
+                if not player.pay(loan.amount):
+                    break
+
+                self._bank.money += loan.amount
+                loan.amount = 0.0
+                loan.return_month = 0
+                loan.loan_status = "idle"
+                self._bank.available_loans[idx] = self._bank.loan_nominals[idx]
+
+            if player.is_bankrupt:
+                continue
+
+            for idx, loan in enumerate(player.loans):
+                if loan.loan_status != "call":
+                    continue
+
+                available_amount = self._bank.available_loans[idx]
+                if available_amount <= 0 or self._bank.money < available_amount:
+                    continue
 
                 self._bank.available_loans[idx] = 0.0
+                loan.amount = available_amount
+                loan.return_month = (
+                    self._state.month + self._bank.loan_terms_in_months[idx]
+                )
                 loan.loan_status = "in_progress"
+                player.money += available_amount
+                self._bank.money -= available_amount
+
+        self._evaluate_game_completion()
 
     def build_or_upgrade(self) -> None:
         """Advance construction projects and kick off requested builds.
@@ -494,45 +819,140 @@ class GameSession:
         and charging remaining costs; new build or upgrade calls are then
         initiated, including the immediate partial payments required.
         """
+        if self._is_finished:
+            return
+
         for player in self._players:
-            for factory in player.factories:
+            if player.is_bankrupt:
+                continue
+
+            for factory in list(player.factories):
+                if (
+                    factory.next_payment_month is not None
+                    and factory.next_payment_amount > 0
+                    and self._state.month >= factory.next_payment_month
+                ):
+                    if player.pay(factory.next_payment_amount):
+                        factory.next_payment_month = None
+                        factory.next_payment_amount = 0.0
+                    else:
+                        break
+
+                if player.is_bankrupt:
+                    break
+
                 match factory.factory_type:
                     case "builds_basic":
                         if factory.end_build_month == self._state.month:
-                            player.money -= self._state.build_basic_cost * 0.5
                             factory.factory_type = "basic"
+                            factory.monthly_expenses = (
+                                self._state.basic_factory_monthly_expenses
+                            )
+                            factory.end_build_month = None
+                            factory.next_payment_month = None
+                            factory.next_payment_amount = 0.0
                     case "builds_auto":
                         if factory.end_build_month == self._state.month:
-                            player.money -= self._state.build_auto_cost * 0.5
                             factory.factory_type = "auto"
+                            factory.monthly_expenses = (
+                                self._state.auto_factory_monthly_expenses
+                            )
+                            factory.end_build_month = None
+                            factory.next_payment_month = None
+                            factory.next_payment_amount = 0.0
                     case "upgrades":
                         if factory.end_upgrade_month == self._state.month:
                             factory.factory_type = "auto"
                             factory.monthly_expenses = (
                                 self._state.auto_factory_monthly_expenses
                             )
+                            factory.end_upgrade_month = None
                     case _:
                         continue
 
-            match player.build_or_upgrade_call:
+            if player.is_bankrupt:
+                continue
+
+            call = player.build_or_upgrade_call
+            player.build_or_upgrade_call = "idle"
+
+            match call:
                 case "idle":
                     continue
                 case "build_basic":
+                    if len(player.factories) >= self._state.max_factories:
+                        continue
+
+                    initial_payment = (
+                        self._state.build_basic_cost
+                        * self._state.build_basic_payment_share
+                    )
+
+                    if player.money < initial_payment:
+                        continue
+
+                    if not player.pay(initial_payment):
+                        continue
+
                     factory = Factory(
                         factory_type="builds_basic",
                         monthly_expenses=self._state.basic_factory_monthly_expenses,
                         end_build_month=self._state.month
                         + self._state.month_for_build_basic,
                     )
-                    player.money -= self._state.build_basic_cost * 0.5
+
+                    remaining_payment = max(
+                        self._state.build_basic_cost - initial_payment,
+                        0.0,
+                    )
+
+                    if remaining_payment > 0:
+                        due_month = max(
+                            self._state.month + 1,
+                            factory.end_build_month
+                            - self._state.build_basic_final_payment_offset,
+                        )
+                        factory.next_payment_month = due_month
+                        factory.next_payment_amount = remaining_payment
+
+                    player.factories.append(factory)
                 case "build_auto":
+                    if len(player.factories) >= self._state.max_factories:
+                        continue
+
+                    initial_payment = (
+                        self._state.build_auto_cost
+                        * self._state.build_auto_payment_share
+                    )
+
+                    if player.money < initial_payment:
+                        continue
+
+                    if not player.pay(initial_payment):
+                        continue
+
                     factory = Factory(
                         factory_type="builds_auto",
                         monthly_expenses=self._state.auto_factory_monthly_expenses,
                         end_build_month=self._state.month
                         + self._state.month_for_build_auto,
                     )
-                    player.money -= self._state.build_auto_cost * 0.5
+
+                    remaining_payment = max(
+                        self._state.build_auto_cost - initial_payment,
+                        0.0,
+                    )
+
+                    if remaining_payment > 0:
+                        due_month = max(
+                            self._state.month + 1,
+                            factory.end_build_month
+                            - self._state.build_auto_final_payment_offset,
+                        )
+                        factory.next_payment_month = due_month
+                        factory.next_payment_amount = remaining_payment
+
+                    player.factories.append(factory)
                 case "upgrade":
                     factory = next(
                         (f for f in player.factories if f.factory_type == "basic"),
@@ -542,23 +962,38 @@ class GameSession:
                     if factory is None:
                         continue
 
+                    if player.money < self._state.upgrade_cost:
+                        continue
+
+                    if not player.pay(self._state.upgrade_cost):
+                        continue
+
                     factory.factory_type = "upgrades"
                     factory.end_upgrade_month = (
                         self._state.month + self._state.month_for_upgrade
                     )
-                    player.money -= self._state.upgrade_cost
+                case _:
+                    continue
+
+        self._evaluate_game_completion()
 
     def end_month(self) -> None:
         """Finalize month-end bookkeeping, including bankruptcy checks.
 
-        Players who have run out of cash are marked bankrupt, and the priority
-        order rotates so turn order reshuffles for the next month.
+        Players who dipped below zero cash are marked bankrupt, and the
+        priority order rotates so turn order reshuffles for the next month.
         """
+        if self._is_finished:
+            return
+
         for player in self._players:
-            if player.money <= 0:
+            if player.money < 0:
                 player.is_bankrupt = True
 
             player.priority -= 1
 
             if player.priority <= 0:
                 player.priority = len(self._players)
+
+        self._state.month += 1
+        self._evaluate_game_completion()
