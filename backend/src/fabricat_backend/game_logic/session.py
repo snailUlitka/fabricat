@@ -1,10 +1,20 @@
 """Session manager for multiplayer and multi-session games."""
 
+from collections.abc import Callable
+from datetime import UTC, datetime
 from math import ceil
 from random import Random
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+from fabricat_backend.game_logic.phases import (
+    GamePhase,
+    PhaseAnalytics,
+    PhaseJournalEntry,
+    PhaseReport,
+    PlayerPhaseAnalytics,
+)
 
 
 class GameSettings(BaseModel):
@@ -15,7 +25,7 @@ class GameSettings(BaseModel):
     simulation can play out deterministically for every participant.
     """
 
-    # TODO: Get settings from BackendSettings, which stores default values
+    # Settings currently mirror README defaults until BackendSettings grows presets.
     rng_seed: int = 42
 
     start_factory_count: int
@@ -53,7 +63,6 @@ class GameSettings(BaseModel):
 
     month_for_build_auto: int
     build_auto_cost: float
-
 
     build_basic_payment_share: float
     build_basic_final_payment_offset: int
@@ -133,6 +142,21 @@ class Loan(BaseModel):
     loan_status: LoanStatus = "idle"
 
 
+class SeniorityRollLogEntry(BaseModel):
+    """Record describing a single tie-break roll attempt."""
+
+    attempt: int
+    player_id: int
+    value: int
+
+
+class SenioritySnapshot(BaseModel):
+    """Stores the seniority order for a given month."""
+
+    month: int
+    order: list[int]
+
+
 class Player(BaseModel):
     """Participant that owns assets, executes strategies, and spends cash.
 
@@ -191,7 +215,6 @@ class Player(BaseModel):
         recurring costs, ensuring the player's liquidity reflects all holdings
         before other actions execute in the monthly cycle.
         """
-
         for factory in self.factories:
             if not self.pay(factory.monthly_expenses):
                 return
@@ -242,7 +265,6 @@ class Bank(BaseModel):
         bidding rounds operate against an updated market, giving players new
         incentives each month.
         """
-
         self.raw_material_sell_volume = self.rng.randint(
             self.raw_material_sell_volume_range[0],
             self.raw_material_sell_volume_range[1],
@@ -315,7 +337,14 @@ class GameSession:
     simulation.
     """
 
-    def __init__(self, players: list[Player], settings: GameSettings) -> None:
+    def __init__(
+        self,
+        players: list[Player],
+        settings: GameSettings,
+        *,
+        rng: Random | None = None,
+        seed_seniority: bool = True,
+    ) -> None:
         """Initialize players, state, and bank according to the settings.
 
         The constructor stores the player roster and delegates to `_init_game`
@@ -326,9 +355,28 @@ class GameSession:
         self._total_players = len(players)
         self._is_finished = False
         self._winner_id: int | None = None
+        self._rng = rng or Random(settings.rng_seed)  # noqa: S311
+        self._journal: list[PhaseJournalEntry] = []
+        self._phase_reports: list[PhaseReport] = []
+        self._phase_event_buffer: list[PhaseJournalEntry] = []
+        self._active_phase: GamePhase | None = None
+        self._active_phase_month: int | None = None
+        self._seniority_rolls: list[SeniorityRollLogEntry] = []
+        self._seniority_history: list[SenioritySnapshot] = []
 
         self._init_game(settings)
         self._init_factories(settings)
+        if seed_seniority:
+            self._seed_seniority_order()
+        else:
+            snapshot = SenioritySnapshot(
+                month=self._state.month,
+                order=[
+                    player.id_
+                    for player in sorted(self._players, key=lambda p: p.priority)
+                ],
+            )
+            self._seniority_history.append(snapshot)
 
     def _init_factories(self, settings: GameSettings) -> None:
         """Grant each player their starting complement of basic factories.
@@ -344,6 +392,67 @@ class GameSession:
                         monthly_expenses=settings.basic_factory_monthly_expenses,
                     )
                 )
+
+    def _seed_seniority_order(self) -> None:
+        """Assign initial seniority via 1d6 rolls with tie re-rolls."""
+        ordered_players = self._resolve_seniority_rolls(
+            players=list(self._players),
+            attempt=1,
+        )
+        for idx, player in enumerate(ordered_players, start=1):
+            player.priority = idx
+
+        snapshot = SenioritySnapshot(
+            month=self._state.month,
+            order=[player.id_ for player in ordered_players],
+        )
+        self._seniority_history.append(snapshot)
+
+    def _resolve_seniority_rolls(
+        self,
+        *,
+        players: list[Player],
+        attempt: int,
+    ) -> list[Player]:
+        """Recursively resolve seniority via repeated 1d6 rolls."""
+        if not players:
+            return []
+
+        rolls: list[tuple[Player, int]] = []
+        for player in players:
+            value = self._rng.randint(1, 6)
+            rolls.append((player, value))
+            self._seniority_rolls.append(
+                SeniorityRollLogEntry(
+                    attempt=attempt,
+                    player_id=player.id_,
+                    value=value,
+                )
+            )
+
+        rolls.sort(key=lambda item: item[1])
+        result: list[Player] = []
+        idx = 0
+        while idx < len(rolls):
+            current_value = rolls[idx][1]
+            tied_players = [rolls[idx][0]]
+            idx += 1
+            while idx < len(rolls) and rolls[idx][1] == current_value:
+                tied_players.append(rolls[idx][0])
+                idx += 1
+
+            if len(tied_players) == 1:
+                result.append(tied_players[0])
+                continue
+
+            result.extend(
+                self._resolve_seniority_rolls(
+                    players=tied_players,
+                    attempt=attempt + 1,
+                )
+            )
+
+        return result
 
     def _init_game(self, settings: GameSettings) -> None:
         """Construct initial game state and bank infrastructure.
@@ -380,7 +489,7 @@ class GameSession:
             msg = "Loan amounts and term configuration mismatch."
             raise ValueError(msg)
         self._bank = Bank(
-            rng=Random(settings.rng_seed),  # noqa: S311
+            rng=Random(settings.rng_seed + 1),  # noqa: S311
             money=settings.bank_start_money,
             available_loans=list(settings.available_loans),
             loan_nominals=list(settings.available_loans),
@@ -396,7 +505,7 @@ class GameSession:
         return [player for player in self._players if not player.is_bankrupt]
 
     def _completed_months(self) -> int:
-        """Number of fully completed months."""
+        """Return the number of fully completed months."""
         return max(self._state.month - 1, 0)
 
     def _determine_winner_id(self, candidates: list[Player]) -> int | None:
@@ -443,9 +552,7 @@ class GameSession:
                     factory_value += self._state.build_basic_cost
             outstanding_payments += max(factory.next_payment_amount, 0.0)
 
-        raw_value = (
-            len(player.raw_materials) * self._bank.raw_material_sell_min_price
-        )
+        raw_value = len(player.raw_materials) * self._bank.raw_material_sell_min_price
         finished_value = (
             len(player.finished_goods) * self._bank.finished_good_buy_max_price
         )
@@ -462,6 +569,89 @@ class GameSession:
             - outstanding_payments
         )
 
+    def _phase_handler_for(self, phase: GamePhase) -> Callable[[], None]:
+        """Return the method that corresponds to the requested phase."""
+        handlers: dict[GamePhase, Callable[[], None]] = {
+            GamePhase.EXPENSES: self.collect_expenses,
+            GamePhase.MARKET: self.set_market,
+            GamePhase.BUY: self.process_buy_bids,
+            GamePhase.PRODUCTION: self.start_production,
+            GamePhase.SELL: self.process_sell_bids,
+            GamePhase.LOANS: self.process_loans,
+            GamePhase.CONSTRUCTION: self.build_or_upgrade,
+            GamePhase.END_MONTH: self.end_month,
+        }
+        try:
+            return handlers[phase]
+        except KeyError as exc:  # pragma: no cover - guarded by enum usage
+            msg = f"Unsupported phase: {phase}"
+            raise ValueError(msg) from exc
+
+    def _log_phase_event(
+        self,
+        message: str,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        """Append a log entry for the currently running phase."""
+        if self._active_phase is None or self._active_phase_month is None:
+            return
+
+        entry = PhaseJournalEntry(
+            month=self._active_phase_month,
+            phase=self._active_phase,
+            message=message,
+            payload=payload or {},
+        )
+        self._phase_event_buffer.append(entry)
+
+    def _build_phase_analytics(self) -> PhaseAnalytics:
+        """Build aggregated analytics payload for the current roster."""
+        players = [
+            PlayerPhaseAnalytics(
+                player_id=player.id_,
+                money=player.money,
+                raw_materials=len(player.raw_materials),
+                finished_goods=len(player.finished_goods),
+                factories=len(player.factories),
+                bankrupt=player.is_bankrupt,
+                active_loans=sum(
+                    1 for loan in player.loans if loan.loan_status == "in_progress"
+                ),
+            )
+            for player in self._players
+        ]
+        bankrupt_ids = [player.player_id for player in players if player.bankrupt]
+        return PhaseAnalytics(players=players, bankrupt_players=bankrupt_ids)
+
+    def snapshot_analytics(self) -> PhaseAnalytics:
+        """Return the latest analytics snapshot without running a phase."""
+        return self._build_phase_analytics()
+
+    def run_phase(self, phase: GamePhase) -> PhaseReport:
+        """Execute the given phase and return a structured report."""
+        handler = self._phase_handler_for(phase)
+        month = self._state.month
+        self._active_phase = phase
+        self._active_phase_month = month
+        self._phase_event_buffer = []
+
+        handler()
+
+        report = PhaseReport(
+            phase=phase,
+            month=month,
+            completed_at=datetime.now(tz=UTC),
+            journal=list(self._phase_event_buffer),
+            analytics=self._build_phase_analytics(),
+        )
+        self._phase_reports.append(report)
+        self._journal.extend(self._phase_event_buffer)
+
+        self._phase_event_buffer = []
+        self._active_phase = None
+        self._active_phase_month = None
+        return report
+
     @property
     def is_finished(self) -> bool:
         """Whether the session already satisfied a victory condition."""
@@ -474,6 +664,31 @@ class GameSession:
             return None
 
         return next((p for p in self._players if p.id_ == self._winner_id), None)
+
+    @property
+    def month(self) -> int:
+        """Current month number."""
+        return self._state.month
+
+    @property
+    def action_journal(self) -> list[PhaseJournalEntry]:
+        """Return a copy of the accumulated action journal."""
+        return list(self._journal)
+
+    @property
+    def phase_reports(self) -> list[PhaseReport]:
+        """Return all published phase reports."""
+        return list(self._phase_reports)
+
+    @property
+    def seniority_history(self) -> list[SenioritySnapshot]:
+        """Return the recorded seniority order per month."""
+        return list(self._seniority_history)
+
+    @property
+    def tie_break_log(self) -> list[SeniorityRollLogEntry]:
+        """Return the raw dice rolls used to resolve seniority ties."""
+        return list(self._seniority_rolls)
 
     @staticmethod
     def _sort_players_buy(player: Player) -> tuple[float, int]:
@@ -515,7 +730,17 @@ class GameSession:
             if player.is_bankrupt:
                 continue
 
+            cash_before = player.money
             player.collect_expenses()
+            self._log_phase_event(
+                "expenses_deducted",
+                {
+                    "player_id": player.id_,
+                    "cash_before": cash_before,
+                    "cash_after": player.money,
+                    "bankrupt": player.is_bankrupt,
+                },
+            )
 
         self._evaluate_game_completion()
 
@@ -529,6 +754,15 @@ class GameSession:
             return
 
         self._bank.set_market()
+        self._log_phase_event(
+            "market_announced",
+            {
+                "raw_material_volume": self._bank.raw_material_sell_volume,
+                "finished_good_volume": self._bank.finished_good_buy_volume,
+                "raw_material_min_price": self._bank.raw_material_sell_min_price,
+                "finished_good_max_price": self._bank.finished_good_buy_max_price,
+            },
+        )
 
     def process_buy_bids(self) -> None:
         """Execute buy orders against the bank's raw material supply.
@@ -571,8 +805,19 @@ class GameSession:
                 )
                 purchased += 1
 
+            if purchased > 0:
+                self._log_phase_event(
+                    "buy_bid_fulfilled",
+                    {
+                        "player_id": player.id_,
+                        "units": purchased,
+                        "price": bid.price,
+                        "remaining_supply": self._bank.raw_material_sell_volume,
+                    },
+                )
+
     @staticmethod
-    def _resolve_production_runs(
+    def _resolve_production_runs(  # noqa: PLR0913
         *,
         requested_units: int,
         factory_count: int,
@@ -633,8 +878,8 @@ class GameSession:
                 continue
 
             available_rm = len(player.raw_materials)
-            available_fg_space = (
-                self._state.max_finished_good_storage - len(player.finished_goods)
+            available_fg_space = self._state.max_finished_good_storage - len(
+                player.finished_goods
             )
 
             if available_rm <= 0 or available_fg_space <= 0:
@@ -700,6 +945,16 @@ class GameSession:
                 )
                 for _ in range(total_units)
             )
+            self._log_phase_event(
+                "production_launched",
+                {
+                    "player_id": player.id_,
+                    "produced_units": total_units,
+                    "launch_cost": basic_cost + auto_cost,
+                    "raw_materials_after": len(player.raw_materials),
+                    "finished_goods_after": len(player.finished_goods),
+                },
+            )
 
         self._evaluate_game_completion()
 
@@ -738,7 +993,18 @@ class GameSession:
                 player.finished_goods.pop()
                 sold += 1
 
-    def process_loans(self) -> None:
+            if sold > 0:
+                self._log_phase_event(
+                    "sell_bid_cleared",
+                    {
+                        "player_id": player.id_,
+                        "units": sold,
+                        "price": bid.price,
+                        "remaining_demand": self._bank.finished_good_buy_volume,
+                    },
+                )
+
+    def process_loans(self) -> None:  # noqa: C901, PLR0912
         """Update loan balances, collect repayments, and fund new calls.
 
         Players are examined from highest to lowest priority. Interest is
@@ -753,6 +1019,10 @@ class GameSession:
             if player.is_bankrupt:
                 continue
 
+            interest_paid = 0.0
+            principal_paid = 0.0
+            loans_issued: list[float] = []
+
             if all(loan.loan_status == "idle" for loan in player.loans):
                 continue
 
@@ -760,9 +1030,7 @@ class GameSession:
                 if loan.loan_status != "in_progress":
                     continue
 
-                interest = (
-                    loan.amount * self._state.loans_monthly_expenses_in_percents
-                )
+                interest = loan.amount * self._state.loans_monthly_expenses_in_percents
                 if interest <= 0:
                     continue
 
@@ -770,8 +1038,20 @@ class GameSession:
                     break
 
                 self._bank.money += interest
+                interest_paid += interest
 
             if player.is_bankrupt:
+                if interest_paid > 0:
+                    self._log_phase_event(
+                        "loan_activity",
+                        {
+                            "player_id": player.id_,
+                            "interest_paid": interest_paid,
+                            "principal_paid": principal_paid,
+                            "loans_issued": loans_issued,
+                            "bankrupt": player.is_bankrupt,
+                        },
+                    )
                 continue
 
             for idx, loan in enumerate(player.loans):
@@ -785,12 +1065,23 @@ class GameSession:
                     break
 
                 self._bank.money += loan.amount
+                principal_paid += loan.amount
                 loan.amount = 0.0
                 loan.return_month = 0
                 loan.loan_status = "idle"
                 self._bank.available_loans[idx] = self._bank.loan_nominals[idx]
 
             if player.is_bankrupt:
+                self._log_phase_event(
+                    "loan_activity",
+                    {
+                        "player_id": player.id_,
+                        "interest_paid": interest_paid,
+                        "principal_paid": principal_paid,
+                        "loans_issued": loans_issued,
+                        "bankrupt": player.is_bankrupt,
+                    },
+                )
                 continue
 
             for idx, loan in enumerate(player.loans):
@@ -809,10 +1100,28 @@ class GameSession:
                 loan.loan_status = "in_progress"
                 player.money += available_amount
                 self._bank.money -= available_amount
+                loans_issued.append(available_amount)
+
+            if (
+                interest_paid > 0
+                or principal_paid > 0
+                or loans_issued
+                or player.is_bankrupt
+            ):
+                self._log_phase_event(
+                    "loan_activity",
+                    {
+                        "player_id": player.id_,
+                        "interest_paid": interest_paid,
+                        "principal_paid": principal_paid,
+                        "loans_issued": loans_issued,
+                        "bankrupt": player.is_bankrupt,
+                    },
+                )
 
         self._evaluate_game_completion()
 
-    def build_or_upgrade(self) -> None:
+    def build_or_upgrade(self) -> None:  # noqa: C901, PLR0912, PLR0915
         """Advance construction projects and kick off requested builds.
 
         Existing projects are checked for completion, adjusting factory states
@@ -832,9 +1141,18 @@ class GameSession:
                     and factory.next_payment_amount > 0
                     and self._state.month >= factory.next_payment_month
                 ):
-                    if player.pay(factory.next_payment_amount):
+                    amount_due = factory.next_payment_amount
+                    if player.pay(amount_due):
                         factory.next_payment_month = None
                         factory.next_payment_amount = 0.0
+                        self._log_phase_event(
+                            "construction_payment",
+                            {
+                                "player_id": player.id_,
+                                "amount": amount_due,
+                                "factory_type": factory.factory_type,
+                            },
+                        )
                     else:
                         break
 
@@ -851,6 +1169,13 @@ class GameSession:
                             factory.end_build_month = None
                             factory.next_payment_month = None
                             factory.next_payment_amount = 0.0
+                            self._log_phase_event(
+                                "construction_completed",
+                                {
+                                    "player_id": player.id_,
+                                    "result": "basic",
+                                },
+                            )
                     case "builds_auto":
                         if factory.end_build_month == self._state.month:
                             factory.factory_type = "auto"
@@ -860,6 +1185,13 @@ class GameSession:
                             factory.end_build_month = None
                             factory.next_payment_month = None
                             factory.next_payment_amount = 0.0
+                            self._log_phase_event(
+                                "construction_completed",
+                                {
+                                    "player_id": player.id_,
+                                    "result": "auto",
+                                },
+                            )
                     case "upgrades":
                         if factory.end_upgrade_month == self._state.month:
                             factory.factory_type = "auto"
@@ -867,6 +1199,13 @@ class GameSession:
                                 self._state.auto_factory_monthly_expenses
                             )
                             factory.end_upgrade_month = None
+                            self._log_phase_event(
+                                "construction_completed",
+                                {
+                                    "player_id": player.id_,
+                                    "result": "upgrade",
+                                },
+                            )
                     case _:
                         continue
 
@@ -916,6 +1255,15 @@ class GameSession:
                         factory.next_payment_amount = remaining_payment
 
                     player.factories.append(factory)
+                    self._log_phase_event(
+                        "construction_started",
+                        {
+                            "player_id": player.id_,
+                            "project": "build_basic",
+                            "initial_payment": initial_payment,
+                            "delivery_month": factory.end_build_month,
+                        },
+                    )
                 case "build_auto":
                     if len(player.factories) >= self._state.max_factories:
                         continue
@@ -953,6 +1301,15 @@ class GameSession:
                         factory.next_payment_amount = remaining_payment
 
                     player.factories.append(factory)
+                    self._log_phase_event(
+                        "construction_started",
+                        {
+                            "player_id": player.id_,
+                            "project": "build_auto",
+                            "initial_payment": initial_payment,
+                            "delivery_month": factory.end_build_month,
+                        },
+                    )
                 case "upgrade":
                     factory = next(
                         (f for f in player.factories if f.factory_type == "basic"),
@@ -971,6 +1328,15 @@ class GameSession:
                     factory.factory_type = "upgrades"
                     factory.end_upgrade_month = (
                         self._state.month + self._state.month_for_upgrade
+                    )
+                    self._log_phase_event(
+                        "construction_started",
+                        {
+                            "player_id": player.id_,
+                            "project": "upgrade",
+                            "cost": self._state.upgrade_cost,
+                            "delivery_month": factory.end_upgrade_month,
+                        },
                     )
                 case _:
                     continue
@@ -994,6 +1360,24 @@ class GameSession:
 
             if player.priority <= 0:
                 player.priority = len(self._players)
+
+        next_order = [
+            player.id_ for player in sorted(self._players, key=lambda pl: pl.priority)
+        ]
+        bankrupt_ids = [player.id_ for player in self._players if player.is_bankrupt]
+        self._log_phase_event(
+            "month_closed",
+            {
+                "bankrupt_players": bankrupt_ids,
+                "seniority_order": next_order,
+            },
+        )
+        self._seniority_history.append(
+            SenioritySnapshot(
+                month=self._state.month + 1,
+                order=next_order,
+            )
+        )
 
         self._state.month += 1
         self._evaluate_game_completion()
