@@ -9,7 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, status
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from fabricat_backend.api.dependencies import get_auth_service
 from fabricat_backend.api.models.session import (
@@ -41,6 +41,8 @@ router = APIRouter(tags=["session"])
 
 
 ActionSender = Callable[[BaseModel], Awaitable[None]]
+
+INBOUND_WS_MESSAGE_ADAPTER = TypeAdapter(InboundWsMessage)
 
 
 PHASE_ACTION_RULES: dict[GamePhase, set[str]] = {
@@ -292,7 +294,7 @@ async def game_session(  # noqa: C901, PLR0912, PLR0915
                 break
 
             try:
-                message = InboundWsMessage.model_validate(data)
+                message = INBOUND_WS_MESSAGE_ADAPTER.validate_python(data)
             except ValidationError as exc:
                 await send(
                     ErrorResponse(
