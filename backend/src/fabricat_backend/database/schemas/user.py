@@ -10,6 +10,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from fabricat_backend.database.base import BaseSchema
 from fabricat_backend.shared import AvatarIcon
 
+AVATAR_ICON_ENUM = Enum(
+    AvatarIcon,
+    name="avatar_icon",
+    values_callable=lambda enum: [member.value for member in enum],
+)
+
 
 class UserSchema(BaseSchema):
     """SQLAlchemy model for application users."""
@@ -23,9 +29,7 @@ class UserSchema(BaseSchema):
         String(64), unique=True, nullable=False, index=True
     )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    icon: Mapped[AvatarIcon] = mapped_column(
-        Enum(AvatarIcon, name="avatar_icon"), nullable=False
-    )
+    icon: Mapped[AvatarIcon] = mapped_column(AVATAR_ICON_ENUM, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
