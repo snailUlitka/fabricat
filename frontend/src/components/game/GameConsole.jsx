@@ -60,6 +60,8 @@ export default function GameConsole({ user, token, onLogout }) {
   const [lastStatus, setLastStatus] = useState(null);
   const [seniorityHistory, setSeniorityHistory] = useState([]);
   const [tieBreakLog, setTieBreakLog] = useState([]);
+  const [sessionRunning, setSessionRunning] = useState(false);
+  const [lastControlAck, setLastControlAck] = useState(null);
 
   const [buyForm, setBuyForm] = useState({ quantity: 2, price: 320 });
   const [sellForm, setSellForm] = useState({ quantity: 2, price: 480 });
@@ -88,6 +90,8 @@ export default function GameConsole({ user, token, onLogout }) {
       setWsError("");
       setSessionInfo(INITIAL_SESSION);
       setCurrentTick(null);
+      setSessionRunning(false);
+      setLastControlAck(null);
       setConnectionState("connecting");
       setConnectNonce((nonce) => nonce + 1);
     },
@@ -100,6 +104,8 @@ export default function GameConsole({ user, token, onLogout }) {
     setCurrentTick(null);
     setLastAck(null);
     setServerError("");
+    setSessionRunning(false);
+    setLastControlAck(null);
     if (socketRef.current) {
       socketRef.current.close(1000, "Client disconnect");
       socketRef.current = null;
@@ -160,6 +166,8 @@ export default function GameConsole({ user, token, onLogout }) {
           setAnalytics(payload.analytics);
           setSeniorityHistory(payload.seniority);
           setTieBreakLog(payload.tie_break_log);
+          setSessionRunning(false);
+          setLastControlAck(null);
           setServerError("");
           break;
         }
@@ -199,6 +207,15 @@ export default function GameConsole({ user, token, onLogout }) {
           setServerError(payload.message);
           break;
         }
+        case "session_control_ack": {
+          if (payload.started) {
+            setSessionRunning(true);
+          } else if (payload.detail?.reason === "session_finished") {
+            setSessionRunning(false);
+          }
+          setLastControlAck(payload);
+          break;
+        }
         default:
           break;
       }
@@ -225,13 +242,17 @@ export default function GameConsole({ user, token, onLogout }) {
         setServerError("Текущая фаза неизвестна.");
         return;
       }
+      if (!sessionRunning) {
+        setServerError("Сессия ещё не запущена.");
+        return;
+      }
       sendMessage({
         type: "phase_action",
         phase: currentPhase,
         payload,
       });
     },
-    [currentPhase, sendMessage]
+    [currentPhase, sendMessage, sessionRunning]
   );
 
   const requestStatus = useCallback(() => {
@@ -241,6 +262,7 @@ export default function GameConsole({ user, token, onLogout }) {
   const sendHeartbeat = useCallback(() => {
     sendMessage({ type: "heartbeat", nonce: Date.now().toString(16) });
   }, [sendMessage]);
+
 
   const handleBuySubmit = (event) => {
     event.preventDefault();
@@ -291,6 +313,15 @@ export default function GameConsole({ user, token, onLogout }) {
   };
 
   const isConnected = connectionState === "connected";
+
+  const startSession = useCallback(() => {
+    if (!isConnected) {
+      setServerError("Сначала подключитесь к сессии.");
+      return;
+    }
+    setServerError("");
+    sendMessage({ type: "session_control", command: "start" });
+  }, [isConnected, sendMessage]);
 
   const analyticsPlayers = analytics?.players ?? [];
   const bankruptIds = analytics?.bankrupt_players ?? [];
@@ -364,37 +395,55 @@ export default function GameConsole({ user, token, onLogout }) {
         <p className="muted-text small">
           Статус: <strong>{connectionState}</strong>
         </p>
+        <p className="muted-text small">
+          Сессия:{" "}
+          <strong>{sessionRunning ? "запущена" : "ожидает запуска"}</strong>
+        </p>
         {sessionInfo.sessionCode ? (
           <p className="muted-text small">
             Код текущей сессии: <code>{sessionInfo.sessionCode}</code>
           </p>
         ) : null}
         <div className="connection-helpers">
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={requestStatus}
-            disabled={!isConnected}
-          >
-            Запросить phase_status
-          </button>
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={sendHeartbeat}
-            disabled={!isConnected}
-          >
-            Heartbeat
-          </button>
-          <button
-            type="button"
-            className="button button-primary"
-            onClick={handleSkip}
-            disabled={!isConnected}
-          >
-            Skip фазу
-          </button>
-        </div>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={requestStatus}
+              disabled={!isConnected}
+            >
+              Запросить phase_status
+            </button>
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={sendHeartbeat}
+              disabled={!isConnected}
+            >
+              Heartbeat
+            </button>
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={startSession}
+              disabled={!isConnected || sessionRunning}
+            >
+              Запустить сессию
+            </button>
+            <button
+              type="button"
+              className="button button-primary"
+              onClick={handleSkip}
+              disabled={!isConnected || !sessionRunning}
+            >
+              Skip фазу
+            </button>
+          </div>
+          {lastControlAck ? (
+            <p className="muted-text small">
+              Команда {lastControlAck.command}:{" "}
+              {lastControlAck.started ? "выполнена" : "отклонена"}
+            </p>
+          ) : null}
         {(serverError || wsError) && (
           <div className="error-banner" role="alert">
             {serverError || wsError}
@@ -516,7 +565,9 @@ export default function GameConsole({ user, token, onLogout }) {
               <button
                 type="submit"
                 className="button button-primary"
-                disabled={!isConnected || currentPhase !== "buy"}
+                disabled={
+                  !isConnected || !sessionRunning || currentPhase !== "buy"
+                }
               >
                 Отправить bid
               </button>
@@ -562,7 +613,11 @@ export default function GameConsole({ user, token, onLogout }) {
               <button
                 type="submit"
                 className="button button-primary"
-                disabled={!isConnected || currentPhase !== "production"}
+                disabled={
+                  !isConnected ||
+                  !sessionRunning ||
+                  currentPhase !== "production"
+                }
               >
                 Запланировать
               </button>
@@ -608,7 +663,9 @@ export default function GameConsole({ user, token, onLogout }) {
               <button
                 type="submit"
                 className="button button-primary"
-                disabled={!isConnected || currentPhase !== "sell"}
+                disabled={
+                  !isConnected || !sessionRunning || currentPhase !== "sell"
+                }
               >
                 Отправить bid
               </button>
@@ -661,7 +718,9 @@ export default function GameConsole({ user, token, onLogout }) {
               <button
                 type="submit"
                 className="button button-primary"
-                disabled={!isConnected || currentPhase !== "loans"}
+                disabled={
+                  !isConnected || !sessionRunning || currentPhase !== "loans"
+                }
               >
                 Обновить слот
               </button>
@@ -693,7 +752,11 @@ export default function GameConsole({ user, token, onLogout }) {
               <button
                 type="submit"
                 className="button button-primary"
-                disabled={!isConnected || currentPhase !== "construction"}
+                disabled={
+                  !isConnected ||
+                  !sessionRunning ||
+                  currentPhase !== "construction"
+                }
               >
                 Отправить запрос
               </button>

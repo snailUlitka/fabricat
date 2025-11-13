@@ -70,3 +70,16 @@
 - *End of month*: Month 2 close triggers victory determination (max months reached); verify final capital analytics and seniority history reflect two completed months.
 
 6. **Tooling + quality** — run `uv run ruff format`, `uv run ruff check`, and `uv run pytest` to ensure style and test suite remain green before committing.
+
+## Current Task — stabilize gameplay controls (Nov 10, 2025)
+
+1. **Investigate reported UX issues** — reproduce the immediate phase start, broken skip button, and permanently disabled bid button by inspecting the WebSocket contract between `frontend/src/components/game/GameConsole.jsx` and `backend/src/fabricat_backend/api/routers/session.py`.
+2. **Introduce explicit session start & fast-forward hooks** — extend the backend models/router so sessions wait for a `session_control:start` command and so skip actions cancel the active timer; cover the change with the existing WebSocket E2E test.
+3. **Update the frontend console** — add a “start session” control, track the running state, gate phase actions on that state, and surface confirmations/error states from the new backend messages.
+4. **Validate & document** — rerun backend/ frontend linters/tests and capture the new workflow in the relevant AGENTS so future agents know about the extra control message.
+
+## Auto-start regression follow-up (Nov 11, 2025)
+
+1. **Reinstate lobby timer** — sessions now schedule a 60-second countdown as soon as a player joins; once at least two players are present (or four join instantly) the backend auto-starts the runtime and emits a `session_control_ack` with `reason="auto_timer"`.
+2. **Enforce player limits** — both manual and automatic starts verify `player_count >= 2`, and hitting four participants bypasses the timer by starting immediately; failures surface via structured `session_control_ack` errors.
+3. **Keep manual override** — the frontend start button continues to work (and cancels the timer), while skips still fast-forward phases after the session begins.

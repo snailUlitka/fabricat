@@ -47,3 +47,10 @@ Maintain a clear dependency direction: `shared` → `game_logic` → `api`. Avoi
 - Always use absolute imports rooted at `fabricat_backend`; avoid relative imports such as `from .module import ...`.
 
 By following these rules you help downstream agents (and humans) keep the backend coherent and maintainable.
+
+## Gameplay WebSocket notes
+
+- Sessions no longer auto-start when a socket joins. After receiving the `welcome` payload, wait for the client to send `{"type": "session_control", "command": "start"}` before calling `SessionRuntime.start()`. Use `SessionControlAckResponse` to confirm the transition.
+- A `phase_action` with payload `{"kind": "skip"}` now cancels the active timer via `SessionRuntime.fast_forward_phase()`, which lets the frontend advance phases without waiting out the full duration.
+- A background lobby timer now auto-starts a session 60 seconds after the first player joins (once `player_count >= 2`). The start button still forces an immediate launch, but the backend will reject the command if fewer than two players are present. Hitting four players triggers an instant start without waiting for the timer.
+- Session contexts are shared across all sockets that use the same `session_code`. Up to four human players can claim seats before the game launches; once the runtime starts, no new seats are created and each `session_control:start` ack is only sent to the requesting client (auto-start broadcasts go to everyone).

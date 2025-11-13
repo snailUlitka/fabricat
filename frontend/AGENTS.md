@@ -33,6 +33,7 @@ If you need to communicate with the backend during development, configure enviro
 - `src/components/auth/AuthPanel.jsx` collects nickname/password/icon data and passes it directly to the FastAPI backend.
 - `src/components/game/GameConsole.jsx` connects to the WebSocket endpoint (`ws://localhost:8000/ws/game` by default), streams ticks/reports, and exposes forms for each gameplay phase (buy/production/sell/loans/construction).
 - `src/lib/apiClient.js` centralizes the API base URLs; override them with `NEXT_PUBLIC_API_BASE` if the backend runs on another host/port. WebSocket URLs are derived automatically from this base.
+- After connecting to a session, the console sends a `session_control` command with `{"command": "start"}` to begin the monthly loop. The "Запустить сессию" button issues this command, and phase action buttons stay disabled until the command is acknowledged. If you wait, the backend will auto-start 60 seconds after ≥2 players are present, and the console will receive a `session_control_ack` with `reason="auto_timer"` so it can flip into the running state automatically.
 
 ## Dependency management
 - Use npm for installs. Add runtime dependencies with `npm install <package>` and dev tools with `npm install -D <package>`.

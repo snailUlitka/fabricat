@@ -504,6 +504,11 @@ class GameSession:
         """Return non-bankrupt players."""
         return [player for player in self._players if not player.is_bankrupt]
 
+    @property
+    def player_count(self) -> int:
+        """Return the total number of players in the session."""
+        return self._total_players
+
     def _completed_months(self) -> int:
         """Return the number of fully completed months."""
         return max(self._state.month - 1, 0)

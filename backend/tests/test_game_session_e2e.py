@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.testclient import WebSocketTestSession
 
 from fabricat_backend.api import create_api
 from fabricat_backend.api.models.session import GamePhase
@@ -27,6 +26,8 @@ from fabricat_backend.game_logic.session import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterator
     from uuid import UUID
+
+    from starlette.testclient import WebSocketTestSession
 
 
 class FakeUserRepository:
@@ -228,10 +229,13 @@ class PatchedSessionRuntime:
         sender = kwargs["sender"]
         self._current_phase = PHASE_SEQUENCE[0]
         self._last_tick: PhaseTick | None = None
-        self._senders = [sender]
+        self._senders: list[Any] = []
+        self._refcount = 0
+        if sender is not None:
+            self._senders.append(sender)
+            self._refcount = 1
         self._task: asyncio.Task[None] | None = None
         self._stopped = asyncio.Event()
-        self._refcount = 1
         self._harness = harness
         self._initialized = True
 
@@ -253,6 +257,23 @@ class PatchedSessionRuntime:
     def session_code(self) -> str:
         return self._session_code
 
+    @property
+    def has_started(self) -> bool:
+        return self._task is not None
+
+    def add_sender(self, sender: Any) -> None:
+        if sender not in self._senders:
+            self._senders.append(sender)
+            self._refcount += 1
+
+    def remove_sender(self, sender: Any) -> None:
+        with suppress(ValueError):
+            self._senders.remove(sender)
+            self._refcount = max(self._refcount - 1, 0)
+
+    def fast_forward_phase(self) -> None:
+        self._harness.phase_ready[self._current_phase] = True
+
     async def start(self) -> None:
         harness = self._require_harness()
         if self._task is None and self._refcount >= harness.expected_connections:
@@ -272,6 +293,9 @@ class PatchedSessionRuntime:
     async def _broadcast(self, payload: Any) -> None:
         for sender in list(self._senders):
             await sender(payload)
+
+    async def broadcast(self, payload: Any) -> None:
+        await self._broadcast(payload)
 
     async def _phase_loop(self) -> None:
         harness = self._require_harness()
@@ -614,6 +638,12 @@ def test_two_player_websocket_session(
             welcome_beta = ws_beta.receive_json()
             assert welcome_beta["type"] == "welcome"
             assert welcome_beta["phase"] == GamePhase.EXPENSES
+
+            ws_alpha.send_json({"type": "session_control", "command": "start"})
+            start_ack = ws_alpha.receive_json()
+            assert start_ack["type"] == "session_control_ack"
+            assert start_ack["command"] == "start"
+            assert start_ack["started"] is True
 
             player_sockets = {"Alpha": ws_alpha, "Beta": ws_beta}
             reports: list[PhaseReport] = []

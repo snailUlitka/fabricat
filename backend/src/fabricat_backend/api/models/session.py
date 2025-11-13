@@ -113,8 +113,19 @@ class PhaseActionRequest(BaseModel):
     payload: PhaseActionPayload
 
 
+class SessionControlRequest(BaseModel):
+    """Out-of-band command that controls the gameplay runtime."""
+
+    type: Literal["session_control"]
+    command: Literal["start"]
+
+
 InboundWsMessage = Annotated[
-    JoinSessionRequest | PhaseStatusRequest | HeartbeatRequest | PhaseActionRequest,
+    JoinSessionRequest
+    | PhaseStatusRequest
+    | HeartbeatRequest
+    | PhaseActionRequest
+    | SessionControlRequest,
     Field(discriminator="type"),
 ]
 
@@ -173,13 +184,23 @@ class ErrorResponse(BaseModel):
     detail: dict[str, Any] = Field(default_factory=dict)
 
 
+class SessionControlAckResponse(BaseModel):
+    """Acknowledgement emitted after processing a control command."""
+
+    type: Literal["session_control_ack"] = "session_control_ack"
+    command: Literal["start"]
+    started: bool
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
 OutboundWsMessage = Annotated[
     SessionWelcomeResponse
     | PhaseTickResponse
     | PhaseReportResponse
     | ActionAckResponse
     | PhaseStatusResponse
-    | ErrorResponse,
+    | ErrorResponse
+    | SessionControlAckResponse,
     Field(discriminator="type"),
 ]
 
@@ -199,6 +220,8 @@ __all__ = [
     "PhaseStatusResponse",
     "PhaseTickResponse",
     "ProductionPlanPayload",
+    "SessionControlAckResponse",
+    "SessionControlRequest",
     "SessionWelcomeResponse",
     "SkipActionPayload",
     "SubmitBuyBidPayload",
