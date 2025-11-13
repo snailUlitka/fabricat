@@ -6,7 +6,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 import pytest
-from fastapi.testclient import TestClient, WebSocketTestSession
+from fastapi.testclient import TestClient
+from starlette.testclient import WebSocketTestSession
 
 from fabricat_backend.api import create_api
 from fabricat_backend.api.models.session import GamePhase
@@ -222,7 +223,8 @@ class PatchedSessionRuntime:
         harness = self._require_harness()
         self._session = kwargs["session"]
         self._session_code = kwargs["session_code"]
-        self._phase_duration = kwargs.get("phase_duration", 0)
+        # Ignore the real phase duration to keep the test tight
+        self._phase_duration = 0
         sender = kwargs["sender"]
         self._current_phase = PHASE_SEQUENCE[0]
         self._last_tick: PhaseTick | None = None

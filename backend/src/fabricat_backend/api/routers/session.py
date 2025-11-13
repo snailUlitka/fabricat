@@ -281,7 +281,7 @@ async def game_session(  # noqa: C901, PLR0912, PLR0915
 
     async def send(model: BaseModel) -> None:
         async with send_lock:
-            await websocket.send_json(model.model_dump())
+            await websocket.send_json(model.model_dump(mode="json"))
 
     runtime: SessionRuntime | None = None
     controlled_player: Player | None = None
