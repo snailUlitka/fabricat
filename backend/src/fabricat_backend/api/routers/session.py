@@ -747,9 +747,6 @@ async def game_session(  # noqa: C901, PLR0912, PLR0915
                     )
                     continue
 
-                if message.payload.kind == "skip":
-                    context.runtime.fast_forward_phase()
-
                 await send(
                     ActionAckResponse(
                         phase=message.phase,

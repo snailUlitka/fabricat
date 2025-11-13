@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Self
@@ -607,6 +608,120 @@ def _register_player(client: TestClient, nickname: str) -> str:
     assert response.status_code == 201
     data = response.json()
     return data["token"]["access_token"]
+
+
+def test_skip_action_does_not_fast_forward_phase(  # noqa: C901, PLR0915
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ensure one player's skip does not advance the shared phase."""
+
+    settings = _deterministic_settings()
+    session_code = "skipguard"
+
+    with _shared_session_patches(monkeypatch, settings, session_code) as release_phase:
+        tokens = {
+            "Alpha": _register_player(client, "SkipAlpha"),
+            "Beta": _register_player(client, "SkipBeta"),
+        }
+
+        session_router._CURRENT_TEST_SESSION_CODE = session_code
+        with (
+            client.websocket_connect(f"/ws/game?token={tokens['Alpha']}") as ws_alpha,
+            client.websocket_connect(f"/ws/game?token={tokens['Beta']}") as ws_beta,
+        ):
+            ws_alpha.send_json({"type": "join", "session_code": session_code})
+            welcome_alpha = ws_alpha.receive_json()
+            assert welcome_alpha["type"] == "welcome"
+
+            session_router._CURRENT_TEST_SESSION_CODE = session_code
+            ws_beta.send_json({"type": "join", "session_code": session_code})
+            welcome_beta = ws_beta.receive_json()
+            assert welcome_beta["type"] == "welcome"
+
+            ws_alpha.send_json({"type": "session_control", "command": "start"})
+            start_ack = ws_alpha.receive_json()
+            assert start_ack["type"] == "session_control_ack"
+            assert start_ack["started"] is True
+
+            player_sockets = {"Alpha": ws_alpha, "Beta": ws_beta}
+            pending_messages = {alias: deque() for alias in player_sockets}
+
+            # Beta might receive the broadcasted start ack before we begin ticking.
+            initial_beta = ws_beta.receive_json()
+            if initial_beta["type"] != "session_control_ack":
+                pending_messages["Beta"].append(initial_beta)
+
+            def _recv(alias: str, *, use_pending: bool = True) -> dict[str, Any]:
+                queue = pending_messages[alias]
+                if use_pending and queue:
+                    return queue.popleft()
+                return player_sockets[alias].receive_json()
+
+            def _wait_for_type(alias: str, expected: str) -> dict[str, Any]:
+                use_pending = True
+                while True:
+                    event = _recv(alias, use_pending=use_pending)
+                    if event["type"] == expected:
+                        return event
+                    pending_messages[alias].append(event)
+                    use_pending = False
+
+            def _advance_to_phase(target_phase: GamePhase) -> None:
+                while True:
+                    tick_alpha = _wait_for_type("Alpha", "phase_tick")
+                    tick_beta = _wait_for_type("Beta", "phase_tick")
+                    phase = tick_alpha["tick"]["phase"]
+                    assert tick_beta["tick"]["phase"] == phase
+                    if phase == target_phase:
+                        return
+                    release_phase(phase)
+                    _wait_for_type("Alpha", "phase_report")
+                    _wait_for_type("Beta", "phase_report")
+
+            def _expect_action_ack(
+                alias: str,
+                phase: GamePhase,
+                action: str,
+            ) -> None:
+                use_pending = True
+                while True:
+                    event = _recv(alias, use_pending=use_pending)
+                    if event["type"] == "action_ack":
+                        assert event["phase"] == phase
+                        assert event["action"] == action
+                        return
+                    if event["type"] == "error":
+                        pytest.fail(f"{alias} received error response: {event}")
+                    pending_messages[alias].append(event)
+                    use_pending = False
+
+            _advance_to_phase(GamePhase.BUY)
+
+            ws_beta.send_json(
+                {
+                    "type": "phase_action",
+                    "phase": GamePhase.BUY,
+                    "payload": {"kind": "skip"},
+                }
+            )
+            _expect_action_ack("Beta", GamePhase.BUY, "skip")
+
+            ws_alpha.send_json(
+                {
+                    "type": "phase_action",
+                    "phase": GamePhase.BUY,
+                    "payload": {
+                        "kind": "submit_buy_bid",
+                        "quantity": 1,
+                        "price": 250.0,
+                    },
+                }
+            )
+            _expect_action_ack("Alpha", GamePhase.BUY, "submit_buy_bid")
+
+            release_phase(GamePhase.BUY)
+            _wait_for_type("Alpha", "phase_report")
+            _wait_for_type("Beta", "phase_report")
 
 
 def test_two_player_websocket_session(  # noqa: PLR0915
