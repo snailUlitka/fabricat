@@ -646,6 +646,16 @@ def test_two_player_websocket_session(
             assert start_ack["started"] is True
 
             player_sockets = {"Alpha": ws_alpha, "Beta": ws_beta}
+            pending_messages = {alias: None for alias in player_sockets}
+
+            for alias, ws in player_sockets.items():
+                if ws is ws_alpha:
+                    continue
+                initial = ws.receive_json()
+                if initial["type"] == "session_control_ack":
+                    assert initial["started"] is True
+                    continue
+                pending_messages[alias] = initial
             reports: list[PhaseReport] = []
             current_month = 1
 
@@ -726,9 +736,16 @@ def test_two_player_websocket_session(
                 },
             }
 
+            def _next_event(alias: str, ws: WebSocketTestSession) -> dict[str, Any]:
+                cached = pending_messages.get(alias)
+                if cached is not None:
+                    pending_messages[alias] = None
+                    return cached
+                return ws.receive_json()
+
             for expected_phase in PHASE_SEQUENCE * settings.max_months:
-                tick_alpha = ws_alpha.receive_json()
-                tick_beta = ws_beta.receive_json()
+                tick_alpha = _next_event("Alpha", ws_alpha)
+                tick_beta = _next_event("Beta", ws_beta)
                 assert tick_alpha["type"] == "phase_tick"
                 assert tick_beta["type"] == "phase_tick"
                 assert tick_alpha["tick"]["phase"] == expected_phase

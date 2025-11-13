@@ -312,8 +312,6 @@ async def _auto_start_lobby(context: SessionContext) -> None:
         started, detail = await _start_context_session(
             context,
             reason="auto_timer",
-            responder=None,
-            broadcast=True,
         )
         if started:
             return
@@ -325,8 +323,6 @@ async def _start_context_session(
     context: SessionContext,
     *,
     reason: str,
-    responder: ActionSender | None,
-    broadcast: bool,
 ) -> tuple[bool, dict[str, Any]]:
     """Attempt to kick off the session runtime."""
     async with _SESSION_LOCK:
@@ -349,10 +345,7 @@ async def _start_context_session(
         started=True,
         detail={"reason": reason, "phase": phase.value},
     )
-    if broadcast:
-        await context.runtime.broadcast(payload)
-    elif responder is not None:
-        await responder(payload)
+    await context.runtime.broadcast(payload)
     await context.runtime.start()
     return True, {"reason": reason}
 
@@ -659,8 +652,6 @@ async def game_session(  # noqa: C901, PLR0912, PLR0915
                 started, detail = await _start_context_session(
                     context,
                     reason="manual",
-                    responder=send,
-                    broadcast=False,
                 )
                 if not started:
                     await send(
