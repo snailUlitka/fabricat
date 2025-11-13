@@ -171,6 +171,59 @@ def test_process_loans_issues_interest_and_repayment() -> None:
     assert session._bank.available_loans[0] == session._bank.loan_nominals[0]
 
 
+def test_session_expands_player_loans_to_match_settings() -> None:
+    player = make_player(player_id=1, money=5_000.0, priority=1)
+    player.loans = [Loan()]
+    settings = make_settings(
+        available_loans=[5_000.0, 7_500.0, 9_000.0],
+        loan_terms_in_months=[1, 2, 3],
+    )
+
+    session = GameSession(
+        players=[player],
+        settings=settings,
+        seed_seniority=False,
+    )
+
+    assert len(player.loans) == 3
+    assert all(loan.loan_status == "idle" for loan in player.loans)
+    assert session._bank.loan_nominals == settings.available_loans
+
+
+def test_session_trims_idle_extra_player_loans() -> None:
+    player = make_player(player_id=1, money=5_000.0, priority=1)
+    settings = make_settings(
+        available_loans=[5_000.0],
+        loan_terms_in_months=[2],
+    )
+
+    session = GameSession(
+        players=[player],
+        settings=settings,
+        seed_seniority=False,
+    )
+
+    assert len(player.loans) == 1
+    assert session._bank.available_loans == [5_000.0]
+
+
+def test_session_rejects_extra_non_idle_loan_slots() -> None:
+    player = make_player(player_id=1, money=5_000.0, priority=1)
+    player.loans[1].loan_status = "in_progress"
+    player.loans[1].amount = 100.0
+    settings = make_settings(
+        available_loans=[5_000.0],
+        loan_terms_in_months=[2],
+    )
+
+    with pytest.raises(ValueError, match="loan slots"):
+        GameSession(
+            players=[player],
+            settings=settings,
+            seed_seniority=False,
+        )
+
+
 def test_build_basic_factory_tracks_second_payment_and_limit() -> None:
     settings = make_settings(max_factories=1, month_for_build_basic=2)
     player = make_player(player_id=1, money=10_000.0, priority=1)

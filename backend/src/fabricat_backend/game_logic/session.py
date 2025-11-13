@@ -365,6 +365,7 @@ class GameSession:
         self._seniority_history: list[SenioritySnapshot] = []
 
         self._init_game(settings)
+        self._synchronize_player_loans(expected_slots=len(settings.available_loans))
         self._init_factories(settings)
         if seed_seniority:
             self._seed_seniority_order()
@@ -499,6 +500,36 @@ class GameSession:
             raw_material_sell_min_price_range=settings.bank_raw_material_sell_min_price_range,
             finished_good_buy_max_price_range=settings.bank_finished_good_buy_max_price_range,
         )
+
+    def _synchronize_player_loans(self, *, expected_slots: int) -> None:
+        """Ensure player loan slots mirror the bank configuration."""
+        if expected_slots < 0:
+            msg = "Number of loan slots cannot be negative."
+            raise ValueError(msg)
+
+        for player in self._players:
+            current_slots = len(player.loans)
+            if current_slots < expected_slots:
+                player.loans.extend(
+                    Loan() for _ in range(expected_slots - current_slots)
+                )
+                continue
+
+            if current_slots == expected_slots:
+                continue
+
+            extra_slots = player.loans[expected_slots:]
+            if any(
+                loan.loan_status != "idle" or loan.amount > 0 or loan.return_month > 0
+                for loan in extra_slots
+            ):
+                msg = (
+                    "Player has more loan slots than allowed by the game settings "
+                    "and the extra slots contain active data."
+                )
+                raise ValueError(msg)
+
+            player.loans = player.loans[:expected_slots]
 
     def _active_players(self) -> list[Player]:
         """Return non-bankrupt players."""

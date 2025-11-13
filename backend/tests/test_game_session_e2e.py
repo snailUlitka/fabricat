@@ -609,7 +609,7 @@ def _register_player(client: TestClient, nickname: str) -> str:
     return data["token"]["access_token"]
 
 
-def test_two_player_websocket_session(
+def test_two_player_websocket_session(  # noqa: PLR0915
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Drive a full two-month session with two players over WebSockets."""
@@ -646,7 +646,7 @@ def test_two_player_websocket_session(
             assert start_ack["started"] is True
 
             player_sockets = {"Alpha": ws_alpha, "Beta": ws_beta}
-            pending_messages = {alias: None for alias in player_sockets}
+            pending_messages = dict.fromkeys(player_sockets, None)
 
             for alias, ws in player_sockets.items():
                 if ws is ws_alpha:
